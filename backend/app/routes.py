@@ -63,14 +63,20 @@ def gemini_suggestions(req: DescriptionRequest):
 
 
     # 1. Generate product descriptions with a text model
+        # 1. Generate product descriptions with a text model
+        # 1. Generate product descriptions with a text model
     system_instructions = (
-    "Sen bir e-ticaret asistanısın. Sana ürün ismi unutan insanlar gelip belirsiz kelimelerle ürünlerini tanımlar. "
-    "Görevin, bu kelimelerle en çok uyuşan ve birbirinden farklı 4 ürün önermek. "
-    "Sonucu sadece JSON formatında, 'urunler' adında bir anahtar altında bir liste olarak döndür. "
-    "Her ürün listesi objesi 'urun_adi' (Türkçe), 'urun_aciklama' (Türkçe), ve 'urun_adi_en' (İngilizce) alanları içermelidir. "
-    "Örneğin 'derz dolgusu' için 'urun_adi_en' alanı 'grout filler' olmalıdır. "
-    "JSON dışında kesinlikle başka metin ekleme."
-)
+        "Sen bir e-ticaret asistanısın. Sana ürün ismi unutan insanlar gelip belirsiz kelimelerle ürünlerini tanımlar. "
+        "Görevin, bu kelimelerle en çok uyuşan ve birbirinden farklı 4 ürün önermek. "
+        "Sonucu sadece JSON formatında, 'urunler' adında bir anahtar altında bir liste olarak döndür. "
+        "Her ürün listesi objesi 'urun_adi' (Türkçe), 'urun_aciklama' (Türkçe), 'urun_adi_en' (İngilizce) ve 'visual_representation' (İngilizce) alanları içermelidir. "
+        "Bu 'visual_representation' alanı, bir görsel üretim yapay zekası için talimattır. Ürünün markasız, jenerik bir versiyonunun nasıl göründüğünü detaylıca tarif etmelidir. Üründe renk sınırlaması yoktur."
+        "Örneğin, 'derz dolgusu' için 'a tube of thick paste-like grout filler with a nozzle at the end, shown next to a small amount of the product squeezed out' gibi bir tanım olmalıdır. "
+        "Bu tanım, ürünün fiziksel özelliklerini, şeklini ve materyalini içermeli ancak marka, yazı veya logo içermemelidir. "
+        "Ayrıca, bu tanım ürünün tamamının görüneceği ve hiçbir parçasının kırpılmayacağı/kesilmeyeceği şekilde yapılmalıdır. "
+        "JSON dışında kesinlikle başka metin ekleme."
+    )
+
     combined_prompt = f"{system_instructions}\n\nKullanıcı tarifi: '{req.description}'"
     text_generation_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=" + api_key
     payload = {"contents": [{"parts": [{"text": combined_prompt}]}]}
@@ -87,29 +93,32 @@ def gemini_suggestions(req: DescriptionRequest):
         product_data = json.loads(gemini_response_text)
         products = product_data.get("urunler", [])
 
+        print(products)
+        
         # --- Image Generation ---
         for product in products:
-            subject = product.get('urun_adi_en') or product.get('urun_adi', 'product')
+            visual_description = product.get('visual_representation')
 
-            # --- DEĞİŞİKLİK BURADA BAŞLIYOR ---
-
-            # YENİ PROMPT: Gerçek bir ürün fotoğrafını taklit eden, e-ticaret odaklı stil.
+            if not visual_description:
+                subject = product.get('urun_adi_en') or product.get('urun_adi', 'product')
+                visual_description = f"a generic, new, and clean {subject}"
+            
+            # YENİ PROMPT: Detaylı görsel tanımı ve sabit sanat stilini birleştirirken, ürünün tamamının görünmesi gerektiğini vurgular.
             style_prompt = (
-                f"Professional product photograph of a generic, new, and clean {subject}. "
+                f"Professional product photograph of {visual_description}. "
+                "The entire product must be fully visible and centered in the frame, not cropped or cut off. "
                 "The product is perfectly isolated on a seamless, solid pure white background. "
                 "Shot in a professional photo studio with bright, soft, even commercial lighting. "
                 "Photorealistic, hyper-detailed, 4K, e-commerce style, online marketplace photo."
             )
             
-            # YENİ NEGATİF PROMPT: İstenmeyen tüm elementleri engellemek için daha da kritik.
+            # NEGATİF PROMPT: Aynı kalır.
             negative_style_prompt = (
                 "text, words, logo, branding, labels, writing, signature, watermark, packaging with text, "
-                "people, person, human, hands, fingers, "
+                "people, person, human, hands, fingers,"
                 "clutter, messy, floor, table, shadows, complex background, real-world environment, "
                 "3D render, CGI, drawing, sketch, illustration, cartoon, painting, art, unrealistic"
             )
-
-            # --- DEĞİŞİKLİK BURADA BİTİYOR ---
 
             base64_image = generate_image_with_vertex(
                 prompt=style_prompt,
