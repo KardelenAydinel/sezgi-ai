@@ -8,6 +8,10 @@ from io import BytesIO
 from PIL import Image
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import warnings
+import uuid
+from typing import List, Dict, Any
+import sqlite3
+from pathlib import Path
 
 # Suppress the specific UserWarning from the Vertex AI SDK
 warnings.filterwarnings(
@@ -20,10 +24,159 @@ warnings.filterwarnings(
 import vertexai
 from vertexai.preview.vision_models import ImageGenerationModel
 
+# Import agent module and models
+from app.agent import process_product_for_tags, run_tag_generation_with_visual
+from app.models import ProductCard, ProductCollection, TagGenerationRequest, TagGenerationResponse
+
 router = APIRouter()
+
+# Database setup
+DB_PATH = Path(__file__).parent / "data" / "products.db"
+DB_PATH.parent.mkdir(exist_ok=True)
+
+def init_database():
+    """Initialize the products database"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS products (
+            id TEXT PRIMARY KEY,
+            urun_adi TEXT NOT NULL,
+            urun_aciklama TEXT,
+            urun_adi_en TEXT,
+            visual_representation TEXT,
+            image_base64 TEXT,
+            tags TEXT,  -- JSON string
+            confidence_score REAL,
+            category TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+
+# Initialize database on startup
+init_database()
 
 class DescriptionRequest(BaseModel):
     description: str
+
+class ProductTagRequest(BaseModel):
+    product: dict
+
+class SaveProductRequest(BaseModel):
+    """Ürün kartlarını kaydetmek için request modeli"""
+    products: List[dict]
+
+class ProductQueryRequest(BaseModel):
+    """Ürün sorgulama request modeli"""
+    query: str
+    limit: int = 10
+
+def save_product_to_db(product: dict) -> str:
+    """Ürünü veritabanına kaydet"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    product_id = str(uuid.uuid4())
+    tags_json = json.dumps(product.get('tags', []))
+    
+    cursor.execute('''
+        INSERT INTO products (id, urun_adi, urun_aciklama, urun_adi_en, 
+                            visual_representation, image_base64, tags, 
+                            confidence_score, category)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        product_id,
+        product.get('urun_adi'),
+        product.get('urun_aciklama'),
+        product.get('urun_adi_en'),
+        product.get('visual_representation'),
+        product.get('image_base64'),
+        tags_json,
+        product.get('confidence_score'),
+        product.get('category')
+    ))
+    
+    conn.commit()
+    conn.close()
+    
+    return product_id
+
+def get_products_from_db(limit: int = 10) -> List[dict]:
+    """Veritabanından ürünleri getir"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT id, urun_adi, urun_aciklama, urun_adi_en, 
+               visual_representation, image_base64, tags, 
+               confidence_score, category, created_at
+        FROM products 
+        ORDER BY created_at DESC 
+        LIMIT ?
+    ''', (limit,))
+    
+    rows = cursor.fetchall()
+    conn.close()
+    
+    products = []
+    for row in rows:
+        product = {
+            'id': row[0],
+            'urun_adi': row[1],
+            'urun_aciklama': row[2],
+            'urun_adi_en': row[3],
+            'visual_representation': row[4],
+            'image_base64': row[5],
+            'tags': json.loads(row[6]) if row[6] else [],
+            'confidence_score': row[7],
+            'category': row[8],
+            'created_at': row[9]
+        }
+        products.append(product)
+    
+    return products
+
+def search_products_by_visual_description(query: str, limit: int = 10) -> List[dict]:
+    """Visual description'larda arama yap"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT id, urun_adi, urun_aciklama, urun_adi_en, 
+               visual_representation, image_base64, tags, 
+               confidence_score, category, created_at
+        FROM products 
+        WHERE visual_representation LIKE ? 
+           OR urun_adi LIKE ? 
+           OR urun_aciklama LIKE ?
+        ORDER BY created_at DESC 
+        LIMIT ?
+    ''', (f'%{query}%', f'%{query}%', f'%{query}%', limit))
+    
+    rows = cursor.fetchall()
+    conn.close()
+    
+    products = []
+    for row in rows:
+        product = {
+            'id': row[0],
+            'urun_adi': row[1],
+            'urun_aciklama': row[2],
+            'urun_adi_en': row[3],
+            'visual_representation': row[4],
+            'image_base64': row[5],
+            'tags': json.loads(row[6]) if row[6] else [],
+            'confidence_score': row[7],
+            'category': row[8],
+            'created_at': row[9]
+        }
+        products.append(product)
+    
+    return products
 
 def resize_image(image_bytes: bytes, size: tuple[int, int] = (256, 256)) -> bytes:
     """Resizes an image to the specified size."""
@@ -145,6 +298,161 @@ def generate_and_encode_image(product: dict) -> dict:
     return product
 
 
+@router.post("/generate_tags_with_visual", response_model=TagGenerationResponse)
+async def generate_tags_with_visual(req: TagGenerationRequest):
+    """
+    Visual description kullanarak tag üret
+    
+    Args:
+        req: Request containing product information and visual description
+        
+    Returns:
+        Generated tags with visual description metadata
+    """
+    try:
+        # Session ID oluştur
+        session_id = str(uuid.uuid4())
+        
+        # Agent'ları visual description ile çalıştır
+        result = await run_tag_generation_with_visual(
+            product=req.product,
+            visual_description=req.visual_description,
+            session_id=session_id
+        )
+        
+        return TagGenerationResponse(
+            tags=result.get('tags', []),
+            confidence=result.get('confidence', 0.0),
+            category=result.get('category', 'unknown'),
+            reasoning=result.get('reasoning', 'No reasoning provided'),
+            visual_description_used=result.get('visual_description_used', req.visual_description)
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Tag generation with visual description failed: {e}")
+
+@router.post("/save_products")
+def save_products(req: SaveProductRequest):
+    """
+    Ürün kartlarını veritabanına kaydet
+    
+    Args:
+        req: Request containing list of products to save
+        
+    Returns:
+        Success message with saved product IDs
+    """
+    try:
+        saved_ids = []
+        for product in req.products:
+            product_id = save_product_to_db(product)
+            saved_ids.append(product_id)
+        
+        return {
+            "success": True, 
+            "message": f"{len(saved_ids)} products saved successfully",
+            "product_ids": saved_ids
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save products: {e}")
+
+@router.get("/products", response_model=ProductCollection)
+def get_products(limit: int = 10):
+    """
+    Kayıtlı ürünleri getir
+    
+    Args:
+        limit: Maximum number of products to return
+        
+    Returns:
+        List of saved products
+    """
+    try:
+        products = get_products_from_db(limit)
+        return ProductCollection(
+            number_of_cards=len(products),
+            products=products
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve products: {e}")
+
+@router.post("/search_products", response_model=ProductCollection)
+def search_products(req: ProductQueryRequest):
+    """
+    Visual description'larda arama yap
+    
+    Args:
+        req: Request containing search query and limit
+        
+    Returns:
+        Matching products
+    """
+    try:
+        products = search_products_by_visual_description(req.query, req.limit)
+        return ProductCollection(
+            number_of_cards=len(products),
+            products=products
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to search products: {e}")
+
+@router.get("/visual_descriptions")
+def get_all_visual_descriptions(limit: int = 50):
+    """
+    Tüm visual description'ları getir (agent'lar için veri kaynağı)
+    
+    Args:
+        limit: Maximum number of descriptions to return
+        
+    Returns:
+        List of visual descriptions with product context
+    """
+    try:
+        products = get_products_from_db(limit)
+        descriptions = []
+        
+        for product in products:
+            if product.get('visual_representation'):
+                descriptions.append({
+                    'product_id': product['id'],
+                    'product_name': product['urun_adi'],
+                    'visual_description': product['visual_representation'],
+                    'existing_tags': product.get('tags', []),
+                    'category': product.get('category')
+                })
+        
+        return {
+            "success": True,
+            "count": len(descriptions),
+            "visual_descriptions": descriptions
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve visual descriptions: {e}")
+
+@router.post("/generate_tags")
+def generate_tags(req: ProductTagRequest):
+    """
+    Generate tags for a given product.
+    
+    Args:
+        req: Request containing product information
+        
+    Returns:
+        Product with generated tags
+    """
+    try:
+        # Process the product to generate tags
+        product_with_tags = process_product_for_tags(req.product)
+        
+        return {"success": True, "product_with_tags": product_with_tags}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Tag generation failed: {e}")
+
 @router.post("/gemini_suggestions")
 def gemini_suggestions(req: DescriptionRequest):
     # --- Environment Variable Checks ---
@@ -222,6 +530,11 @@ def gemini_suggestions(req: DescriptionRequest):
                     print(f"Added failed product: {original_product.get('urun_adi')} - Total so far: {len(updated_products)}")
             
             print(f"Final response: number_of_cards={number_of_cards}, products_count={len(updated_products)}")
+            
+            # Otomatik olarak ürünleri kaydet (isteğe bağlı)
+            # save_request = SaveProductRequest(products=updated_products)
+            # save_products(save_request)
+            
             return {"number_of_cards": number_of_cards, "products": updated_products}
 
     except requests.exceptions.RequestException as e:
