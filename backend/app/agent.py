@@ -13,8 +13,7 @@ from pathlib import Path
 from agno.agent import Agent
 from agno.models.google import Gemini
 
-# --- Database functions ---
-from app.database import search_products_by_tags
+# --- MCP Tools for database access ---
 from agno.tools.mcp import MCPTools
 
 # --- Proje Konfigürasyonu ---
@@ -73,19 +72,125 @@ def _create_product_evaluator_agent() -> Agent:
     
     return product_evaluator
 
-async def search_ecommerce_products_async(tags: List[str], limit: int = 8) -> List[dict]:
-    """E-ticaret ürünlerinde asenkron arama - database.py'den import edilen fonksiyonu kullanır"""
-    print(f"🔍 [AGENT] Starting product search...")
+async def search_ecommerce_products_via_mcp_agent(tags: List[str], limit: int = 8) -> List[dict]:
+    """MCP Agent kullanarak e-ticaret ürünlerinde arama"""
+    print(f"🔍 [AGENT] Starting MCP product search via Agent...")
     print(f"   🏷️ Tags: {tags}")
     print(f"   📊 Limit: {limit}")
     
     try:
-        # Database'den direkt arama yap
-        print(f"   🗄️ Searching database directly...")
-        products = search_products_by_tags(search_tags=tags, limit=limit)
-        print(f"   ✅ Found {len(products)} products from database")
+        # MCP üzerinden database'e erişim - Agent kullanarak
+        print(f"   🔗 Connecting to MCP server...")
         
-        # EcommerceProduct model'lerini dict'e çevir
+        async with MCPTools(MCP_SERVER_COMMAND, timeout_seconds=60) as mcp_tools:
+            print(f"   ✅ MCP connection established")
+            
+            # MCP tool'unu Agent'a vererek kullan
+            print(f"   🤖 Creating MCP-enabled search agent...")
+            
+            search_agent = Agent(
+                name="MCP Search Agent",
+                role="Database'de ürün arar",
+                model=Gemini(id="gemini-2.5-flash", api_key=GEMINI_API_KEY),
+                tools=[mcp_tools],
+                instructions=[
+                    "Sen bir ürün arama uzmanısın.",
+                    "search_ecommerce_products_by_tags tool'unu kullanarak database'de ürün ararsın.",
+                    "Verilen tag'ler ve limit ile arama yapar, sonuçları JSON formatında dönersin."
+                ],
+                markdown=False
+            )
+            
+            # Agent'a arama yaptır
+            search_prompt = f"""
+            Lütfen aşağıdaki parametrelerle ürün arama yap:
+            - search_tags: {tags}
+            - limit: {limit}
+            
+            search_ecommerce_products_by_tags tool'unu kullan ve sonuçları döndür.
+            """
+            
+            print(f"   🔄 Calling MCP agent with search request...")
+            mcp_response = await search_agent.arun(message=search_prompt)
+            print(f"   📦 MCP Agent Response received: {str(mcp_response)[:150]}...")
+            
+            # MCP response'u parse et
+            if hasattr(mcp_response, 'content'):
+                response_content = mcp_response.content
+            else:
+                response_content = str(mcp_response)
+            
+            print(f"   🔧 Parsing MCP response...")
+            
+            # MCP'den dönen response genellikle string olur, içinde ürün bilgileri var
+            # Response'u parse etmeye çalış
+            products_dict = []
+            
+            # MCP response'u parse et
+            products_dict = []
+            
+            if "Found" in response_content and "products" in response_content:
+                print(f"   ✅ MCP search completed successfully")
+                
+                # MCP response'tan JSON parse etmeye çalış
+                try:
+                    import re
+                    import json
+                    # JSON array'i bul
+                    json_match = re.search(r'\[.*\]', response_content, re.DOTALL)
+                    if json_match:
+                        json_str = json_match.group()
+                        products_data = json.loads(json_str)
+                        
+                        # Her product'ı dict'e çevir (EcommerceProduct'tan gelebilir)
+                        for product in products_data:
+                            if isinstance(product, dict):
+                                products_dict.append(product)
+                            else:
+                                # Object to dict conversion
+                                product_dict = {
+                                    'id': getattr(product, 'id', ''),
+                                    'name': getattr(product, 'name', ''),
+                                    'description': getattr(product, 'description', ''),
+                                    'price': getattr(product, 'price', 0),
+                                    'currency': getattr(product, 'currency', 'TL'),
+                                    'image_url': getattr(product, 'image_url', ''),
+                                    'tags': getattr(product, 'tags', []),
+                                    'category': getattr(product, 'category', ''),
+                                    'subcategory': getattr(product, 'subcategory', ''),
+                                    'brand': getattr(product, 'brand', ''),
+                                    'stock': getattr(product, 'stock', 0),
+                                    'rating': getattr(product, 'rating', None),
+                                    'review_count': getattr(product, 'review_count', None)
+                                }
+                                products_dict.append(product_dict)
+                        
+                        print(f"   🔧 Successfully parsed {len(products_dict)} products from MCP JSON")
+                        
+                except (json.JSONDecodeError, AttributeError) as parse_error:
+                    print(f"   ⚠️ JSON parsing failed: {parse_error}")
+                    print(f"   📄 Raw response: {response_content[:300]}...")
+                    products_dict = []
+            else:
+                print(f"   ⚠️ Unexpected MCP response format")
+                print(f"   📄 Response content: {response_content[:300]}...")
+                products_dict = []
+            
+            print(f"   📦 MCP Agent search returned {len(products_dict)} products")
+            return products_dict
+            
+    except Exception as e:
+        print(f"   ❌ MCP Agent search error: {e}")
+        print(f"   🔄 Falling back to direct database search...")
+        return await search_ecommerce_products_fallback(tags, limit)
+
+async def search_ecommerce_products_fallback(tags: List[str], limit: int = 8) -> List[dict]:
+    """Fallback: Direct database search without MCP"""
+    try:
+        from app.database import search_products_by_tags
+        products = search_products_by_tags(search_tags=tags, limit=limit)
+        
+        # Convert to dict format
         products_dict = []
         for product in products:
             product_dict = {
@@ -105,12 +210,23 @@ async def search_ecommerce_products_async(tags: List[str], limit: int = 8) -> Li
             }
             products_dict.append(product_dict)
         
-        print(f"   📦 Converted {len(products_dict)} products to dict format")
+        print(f"   🔄 Fallback search returned {len(products_dict)} products")
         return products_dict
-            
-    except Exception as e:
-        print(f"   ❌ Error during ecommerce search: {e}")
+        
+    except Exception as fallback_error:
+        print(f"   ❌ Fallback also failed: {fallback_error}")
         return []
+
+# Main search function that tries MCP first, then fallback
+async def search_ecommerce_products_async(tags: List[str], limit: int = 8) -> List[dict]:
+    """Main search function: MCP first, fallback second"""
+    try:
+        # İlk MCP Agent ile dene
+        return await search_ecommerce_products_via_mcp_agent(tags, limit)
+    except Exception as e:
+        print(f"   ⚠️ MCP method failed: {e}")
+        # Fallback'e düş
+        return await search_ecommerce_products_fallback(tags, limit)
 
 async def run_simple_tag_generation(product: Dict[str, Any], visual_description: str) -> Dict[str, Any]:
     """
@@ -196,11 +312,24 @@ async def run_simple_tag_generation(product: Dict[str, Any], visual_description:
             evaluator = _create_product_evaluator_agent()
             print("✅ Product Evaluator Agent initialized")
             
+            # Ürün listesini kısalt - sadece önemli alanlar
+            simplified_products = []
+            for product in found_products[:8]:  # Max 8 ürün
+                simplified = {
+                    'id': product.get('id', ''),
+                    'name': product.get('name', ''),
+                    'price': product.get('price', 0),
+                    'tags': product.get('tags', [])[:5],  # Max 5 tag
+                    'category': product.get('category', '')
+                }
+                simplified_products.append(simplified)
+            
             evaluation_prompt = f"""
             Generated Tags: {generated_tags}
-            Found Products: {json.dumps(found_products, ensure_ascii=False)}
+            Found Products (simplified): {json.dumps(simplified_products, ensure_ascii=False)}
             
             Bu ürünlerden en uygun 4'ünü seç ve değerlendir.
+            JSON formatında yanıt ver: {{"selected_products": [...], "reasoning": "...", "quality_score": 0.8}}
             """
             
             print("🔄 Sending products to evaluator...")
@@ -302,4 +431,4 @@ def process_product_for_tags(product: Dict[str, Any]) -> Dict[str, Any]:
     tags = generate_tags_for_product(product)
     product_with_tags = product.copy()
     product_with_tags['tags'] = tags
-    return product_with_tags
+    return product_with_tags 
