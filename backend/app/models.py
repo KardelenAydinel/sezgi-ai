@@ -32,3 +32,35 @@ class TagGenerationResponse(BaseModel):
     category: str
     reasoning: str
     visual_description_used: str  # Hangi visual description kullanıldığını track etmek için
+
+# E-ticaret için yeni modeller
+class EcommerceProduct(BaseModel):
+    """E-ticaret ürünü modeli"""
+    id: str
+    name: str
+    description: str
+    price: float
+    currency: str = "TL"
+    image_url: Optional[str] = None
+    tags: List[str]
+    category: str
+    subcategory: Optional[str] = None
+    brand: Optional[str] = None
+    stock: int = 0
+    rating: Optional[float] = None
+    review_count: Optional[int] = None
+    
+class SearchRequest(BaseModel):
+    """Arama isteği modeli"""
+    tags: List[str]
+    limit: int = 4
+    min_price: Optional[float] = None
+    max_price: Optional[float] = None
+    category: Optional[str] = None
+    
+class SearchResponse(BaseModel):
+    """Arama sonucu modeli"""
+    products: List[EcommerceProduct]
+    total_found: int
+    search_tags: List[str]
+    execution_time: Optional[float] = None

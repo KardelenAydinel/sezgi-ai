@@ -4,6 +4,7 @@ This will be enhanced with actual AI agent functionality later.
 """
 import os
 import json
+import requests
 from typing import List, Dict, Any, Optional
 import asyncio
 from pathlib import Path
@@ -99,15 +100,72 @@ def _create_tag_decider_agent() -> Agent:
     
     return tag_decider_agent
 
+def _create_search_agent() -> Agent:
+    """E-ticaret database'inde arama yapan agent"""
+    
+    search_agent = Agent(
+        name="Ecommerce Search Agent",
+        role="Üretilen tag'leri kullanarak e-ticaret database'inde benzer ürünleri bulur",
+        model=Gemini(id="gemini-2.5-flash", api_key=GEMINI_API_KEY),
+        instructions=[
+            "Sen bir e-ticaret arama uzmanısın. Görevin, üretilen tag'leri kullanarak database'de en uygun ürünleri bulmaktır.",
+            "Tag'ler verildiğinde:",
+            "1. Tag'leri öncelik sırasına göre değerlendir",
+            "2. En önemli 4-6 tag'i seç",
+            "3. Bu tag'lerle e-ticaret database'inde arama yap",
+            "4. Bulunan ürünleri relevance'a göre sırala",
+            "5. En uygun 4 ürünü seç",
+            "Search sonuçlarını JSON formatında döndür:",
+            "{'search_tags': List[str], 'found_products': List[dict], 'search_reasoning': str}",
+            "Arama yaparken şu kriterleri kullan:",
+            "- Primary tag'ler daha yüksek ağırlık alsın",
+            "- Fiyat aralığı makul olsun",
+            "- Stokta olan ürünleri öncelik ver",
+            "- Rating'i yüksek ürünleri öncelik ver"
+        ],
+        tools=[],
+        monitoring=True,
+    )
+    
+    return search_agent
+
+async def search_ecommerce_products_async(tags: List[str], limit: int = 4) -> List[dict]:
+    """E-ticaret ürünlerinde asenkron arama"""
+    try:
+        # Backend API'sine istek at
+        search_data = {
+            "tags": tags,
+            "limit": limit
+        }
+        
+        response = requests.post(
+            "http://localhost:8000/search_ecommerce",
+            json=search_data,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result.get('products', [])
+        else:
+            print(f"Search API error: {response.status_code}")
+            return []
+            
+    except Exception as e:
+        print(f"Error during ecommerce search: {e}")
+        return []
+
 def _create_tag_generation_team(session_id: str) -> Team:
     """Tag generation için agent takımını oluşturur"""
         
     # Agent'ları oluştur
     visual_analyzer = _create_visual_analyzer_agent()
     tag_decider = _create_tag_decider_agent()
+    search_agent = _create_search_agent()
     
     team_instructions = dedent(f"""
-        Sen, ürün bilgilerinden optimal tag'ler üreten bir takım liderisin. Amacın, verilen ürün bilgileri ve visual description'ı analiz ederek en etkili tag'leri üretmektir.
+        Sen, ürün bilgilerinden optimal tag'ler üreten ve e-ticaret araması yapan bir takım liderisin. 
+        Amacın, verilen ürün bilgileri ve visual description'ı analiz ederek en etkili tag'leri üretmek ve benzer ürünleri bulmaktır.
 
         **SÜREÇ AKIŞI:**
         Ürün bilgisi ve visual description verildiğinde aşağıdaki akışı takip et:
@@ -122,11 +180,15 @@ def _create_tag_generation_team(session_id: str) -> Team:
             - Visual analyzer'dan gelen bilgileri vererek optimal tag'ler üretmesini iste
             - Hem primary hem secondary tag'ler oluşturmasını iste
 
-        3. Quality Control:
+        3. E-commerce Search:
+            - `Ecommerce Search Agent`'ı çağır
+            - Üretilen tag'leri vererek database'de benzer ürünler aramasını iste
+            - En uygun 4 ürünü bulmasını iste
+
+        4. Final Output:
             - Üretilen tag'leri gözden geçir
-            - Visual description'daki önemli fiziksel özelliklerin tag'lerde yer aldığından emin ol
-            - E-ticaret arama davranışlarına uygunluğunu kontrol et
-            - Final tag listesini oluştur
+            - Bulunan ürünleri değerlendir
+            - Final sonuçları kullanıcıya sun
 
         **ÇIKTI FORMAT:**
         Her zaman şu formatta JSON döndür:
@@ -135,7 +197,16 @@ def _create_tag_generation_team(session_id: str) -> Team:
             "confidence": 0.85,
             "category": "ürün_kategorisi",
             "reasoning": "Tag seçim gerekçesi ve visual description etkisi",
-            "visual_description_used": "kullanılan visual description"
+            "visual_description_used": "kullanılan visual description",
+            "search_results": [
+                {{
+                    "id": "product_id",
+                    "name": "product_name",
+                    "price": 25.90,
+                    "rating": 4.5,
+                    "tags": ["matching_tags"]
+                }}
+            ]
         }}
 
         **KURALLAR:**
@@ -145,18 +216,18 @@ def _create_tag_generation_team(session_id: str) -> Team:
         - Visual description'daki fiziksel özellikler mutlaka tag'lerde yer almalı
         - Hem genel hem spesifik tag'ler olsun
         - E-ticaret terminolojisini kullan
-        - Visual description'ın tag generation'a nasıl katkıda bulunduğunu açıkla
+        - Search sonuçları mutlaka dahil edilmeli
     """)
     
     tag_team = Team(
-        name="Tag Generation Team",
+        name="Tag Generation and Search Team",
         mode="coordinate", 
         model=Gemini(id="gemini-2.5-pro", api_key=GEMINI_API_KEY),
-        members=[visual_analyzer, tag_decider],
+        members=[visual_analyzer, tag_decider, search_agent],
         tools=[],
         storage=team_storage,
         session_id=session_id,
-        description="Ürün bilgileri ve visual description'dan optimal tag'ler üreten AI takımı",
+        description="Ürün bilgileri ve visual description'dan optimal tag'ler üreten ve e-ticaret araması yapan AI takımı",
         instructions=team_instructions,
         add_datetime_to_instructions=True,
         markdown=False,
@@ -164,6 +235,87 @@ def _create_tag_generation_team(session_id: str) -> Team:
     )
     
     return tag_team
+
+async def run_tag_generation_with_visual_and_search(product: Dict[str, Any], visual_description: str, session_id: str) -> Dict[str, Any]:
+    """
+    Visual description ile tag generation ve e-ticaret araması fonksiyonu
+    
+    Args:
+        product: Ürün bilgileri
+        visual_description: LLM'in image generation için yazdığı detaylı açıklama
+        session_id: Oturum ID'si
+        
+    Returns:
+        Generated tags, metadata ve search results
+    """
+    
+    if not GEMINI_API_KEY:
+        raise ValueError("GEMINI_API_KEY ortam değişkeni ayarlanmamış.")
+
+    # Tag generation takımını oluştur
+    tag_team = _create_tag_generation_team(session_id)
+    
+    # Ürün bilgilerini ve visual description'ı mesaj formatına çevir
+    product_message = f"""
+    Ürün Adı: {product.get('urun_adi', 'Bilinmiyor')}
+    Ürün Açıklaması: {product.get('urun_aciklama', 'Açıklama yok')}
+    İngilizce Adı: {product.get('urun_adi_en', 'Bilinmiyor')}
+    
+    Visual Description (LLM tarafından image generation için üretildi):
+    {visual_description}
+    
+    Bu ürün ve visual description için optimal tag'ler üret ve e-ticaret database'inde benzer ürünleri ara. 
+    Visual description'daki fiziksel özellikler ve görsel detaylar özellikle önemli.
+    """
+    
+    # Takımı çalıştır
+    response = await tag_team.arun(message=product_message)
+    
+    # Response'u parse et ve return et
+    try:
+        # Gelen response'un string olup olmadığını kontrol et
+        if isinstance(response, str):
+            # String'i JSON'a çevir
+            # Bazen ```json ... ``` formatında gelebiliyor, onu temizleyelim
+            if response.strip().startswith("```json"):
+                response_content = response.strip()[7:-3].strip()
+            else:
+                response_content = response
+            result = json.loads(response_content)
+        elif hasattr(response, 'content') and isinstance(response.content, str):
+            # Eğer 'content' attribute'u varsa ve string ise onu kullan
+            response_content = response.content
+            if response_content.strip().startswith("```json"):
+                response_content = response_content.strip()[7:-3].strip()
+            result = json.loads(response_content)
+        else:
+            # Diğer durumlar için (e.g. dict)
+            result = response if isinstance(response, dict) else json.loads(str(response))
+        
+        # Visual description'ı response'a ekle
+        result['visual_description_used'] = visual_description
+        
+        # Eğer search_results yoksa, manuel olarak arama yap
+        if 'search_results' not in result or not result['search_results']:
+            search_results = await search_ecommerce_products_async(result.get('tags', []))
+            result['search_results'] = search_results
+        
+        return result
+    except (json.JSONDecodeError, TypeError) as e:
+        print(f"Agent response parse edilemedi. Hata: {e}, Gelen Response: {response}")
+        
+        # Fallback: static tags ve manuel arama
+        fallback_tags = ["ev_dekorasyonu", "banyo_aksesuari", "mutfak_gereci", "temizlik_urun", "yapi_malzeme"]
+        search_results = await search_ecommerce_products_async(fallback_tags)
+        
+        return {
+            "tags": fallback_tags,
+            "confidence": 0.5,
+            "category": "genel",
+            "reasoning": f"Agent response parse edilemedi: {e}",
+            "visual_description_used": visual_description,
+            "search_results": search_results
+        }
 
 async def run_tag_generation_with_visual(product: Dict[str, Any], visual_description: str, session_id: str) -> Dict[str, Any]:
     """
