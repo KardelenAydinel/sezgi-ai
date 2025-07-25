@@ -7,6 +7,14 @@ import base64
 from io import BytesIO
 from PIL import Image
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import warnings
+
+# Suppress the specific UserWarning from the Vertex AI SDK
+warnings.filterwarnings(
+    "ignore",
+    message="This feature is deprecated as of June 24, 2025 and will be removed on June 24, 2026.",
+    category=UserWarning
+)
 
 # Vertex AI SDK
 import vertexai
@@ -81,11 +89,11 @@ def generate_and_encode_image(product: dict) -> dict:
     if not visual_description:
         subject = product.get('urun_adi_en') or product.get('urun_adi', 'product')
         visual_description = f"a generic, new, and clean {subject}"
-
+    
     style_prompt = (
         f"Professional product photograph of {visual_description}. "
+        "The product is shown by itself, isolated on a seamless, solid pure white background. "
         "The entire product must be fully visible and centered in the frame, not cropped or cut off. "
-        "The product is perfectly isolated on a seamless, solid pure white background. "
         "Shot in a professional photo studio with bright, soft, even commercial lighting. "
         "Photorealistic, hyper-detailed, 4K, e-commerce style, online marketplace photo."
     )
@@ -154,23 +162,24 @@ def gemini_suggestions(req: DescriptionRequest):
         raise HTTPException(status_code=500, detail=f"Failed to initialize Vertex AI: {e}")
 
 
-    # 1. Generate product descriptions with a text model
-        # 1. Generate product descriptions with a text model
-        # 1. Generate product descriptions with a text model
+    # --- AŞAMA 1: SİSTEM TALİMATINI GÜNCELLEME ---
     system_instructions = (
         "Sen bir e-ticaret asistanısın. Sana ürün ismi unutan insanlar gelip belirsiz kelimelerle ürünlerini tanımlar. "
-        "Görevin, bu kelimelerle en çok uyuşan ve birbirinden farklı 4 ürün önermek. "
-        "Sonucu sadece JSON formatında, 'urunler' adında bir anahtar altında bir liste olarak döndür. "
+        "Önce, kaç tane ürün önereceğini belirle (2, 3 veya 4). Eğer kullanıcının tarifi çok spesifikse 2, orta düzeyde açıksa 3, çok genişse ve birbirinden farklı viable seçenekler bulabiliyorsan 4 öneri yap. "
+        "Bu sayıyı 'number_of_cards' alanında belirt. "
+        "Bu önerileri, kullanıcının tarifine en çok uyandan en az uyana doğru sıralamalısın. "
+        "Sonucu sadece JSON formatında döndür. JSON şu yapıda olmalı: { 'number_of_cards': [2, 3 veya 4], 'urunler': [...] }. "
         "Her ürün listesi objesi 'urun_adi' (Türkçe), 'urun_aciklama' (Türkçe), 'urun_adi_en' (İngilizce) ve 'visual_representation' (İngilizce) alanları içermelidir. "
-        "Bu 'visual_representation' alanı, bir görsel üretim yapay zekası için talimattır. Ürünün markasız, jenerik bir versiyonunun nasıl göründüğünü detaylıca tarif etmelidir. Üründe renk sınırlaması yoktur."
+        "Bu 'visual_representation' alanı, bir görsel üretim yapay zekası için talimattır. Ürünün markasız, jenerik bir versiyonunun nasıl göründüğünü detaylıca tarif etmelidir. Üründe renk sınırlaması yoktur. "
         "Örneğin, 'derz dolgusu' için 'a tube of thick paste-like grout filler with a nozzle at the end, shown next to a small amount of the product squeezed out' gibi bir tanım olmalıdır. "
         "Bu tanım, ürünün fiziksel özelliklerini, şeklini ve materyalini içermeli ancak marka, yazı veya logo içermemelidir. "
         "Ayrıca, bu tanım ürünün tamamının görüneceği ve hiçbir parçasının kırpılmayacağı/kesilmeyeceği şekilde yapılmalıdır. "
         "JSON dışında kesinlikle başka metin ekleme."
     )
 
+    
     combined_prompt = f"{system_instructions}\n\nKullanıcı tarifi: '{req.description}'"
-    text_generation_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=" + api_key
+    text_generation_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key={api_key}"
     payload = {"contents": [{"parts": [{"text": combined_prompt}]}]}
 
     try:
@@ -183,8 +192,13 @@ def gemini_suggestions(req: DescriptionRequest):
             gemini_response_text = gemini_response_text.strip()[7:-3].strip()
         
         product_data = json.loads(gemini_response_text)
+        number_of_cards = product_data.get("number_of_cards", 4)
         products = product_data.get("urunler", [])
+        
+        # Ensure we don't exceed the specified number of cards
+        products = products[:number_of_cards]
 
+        print(f"Number of cards: {number_of_cards}")
         print(products)
         
         # --- Concurrent Image Generation ---
@@ -198,14 +212,17 @@ def gemini_suggestions(req: DescriptionRequest):
                 try:
                     updated_product = future.result()
                     updated_products.append(updated_product)
+                    print(f"Added product: {updated_product.get('urun_adi')} - Total so far: {len(updated_products)}")
                 except Exception as exc:
                     print(f"A product image generation task generated an exception: {exc}")
                     # Optionally, you can add the original product without an image
                     original_product = future_to_product[future]
                     original_product['image_base64'] = None
                     updated_products.append(original_product)
-
-        return {"products": updated_products}
+                    print(f"Added failed product: {original_product.get('urun_adi')} - Total so far: {len(updated_products)}")
+            
+            print(f"Final response: number_of_cards={number_of_cards}, products_count={len(updated_products)}")
+            return {"number_of_cards": number_of_cards, "products": updated_products}
 
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=f"API request failed: {e}")
