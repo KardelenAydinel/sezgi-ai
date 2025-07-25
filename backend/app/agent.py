@@ -15,6 +15,7 @@ from agno.models.google import Gemini
 
 # --- Database functions ---
 from app.database import search_products_by_tags
+from agno.tools.mcp import MCPTools
 
 # --- Proje Konfigürasyonu ---
 OUTPUT_DIR = Path(__file__).parent / "output"
@@ -25,6 +26,7 @@ load_dotenv()
 
 # --- API KEY ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+MCP_SERVER_COMMAND = "fastmcp run mcp_server.py"
 
 def _create_tag_generator_agent() -> Agent:
     """Step 1: Visual description'dan tag'ler üretir"""
@@ -73,9 +75,15 @@ def _create_product_evaluator_agent() -> Agent:
 
 async def search_ecommerce_products_async(tags: List[str], limit: int = 8) -> List[dict]:
     """E-ticaret ürünlerinde asenkron arama - database.py'den import edilen fonksiyonu kullanır"""
+    print(f"🔍 [AGENT] Starting product search...")
+    print(f"   🏷️ Tags: {tags}")
+    print(f"   📊 Limit: {limit}")
+    
     try:
         # Database'den direkt arama yap
+        print(f"   🗄️ Searching database directly...")
         products = search_products_by_tags(search_tags=tags, limit=limit)
+        print(f"   ✅ Found {len(products)} products from database")
         
         # EcommerceProduct model'lerini dict'e çevir
         products_dict = []
@@ -97,10 +105,11 @@ async def search_ecommerce_products_async(tags: List[str], limit: int = 8) -> Li
             }
             products_dict.append(product_dict)
         
+        print(f"   📦 Converted {len(products_dict)} products to dict format")
         return products_dict
             
     except Exception as e:
-        print(f"Error during ecommerce search: {e}")
+        print(f"   ❌ Error during ecommerce search: {e}")
         return []
 
 async def run_simple_tag_generation(product: Dict[str, Any], visual_description: str) -> Dict[str, Any]:
@@ -115,12 +124,24 @@ async def run_simple_tag_generation(product: Dict[str, Any], visual_description:
         Generated tags, metadata ve search results
     """
     
+    print("\n" + "="*80)
+    print("🤖 [AGENT SYSTEM] Starting Simple Tag Generation Process")
+    print("="*80)
+    print(f"📋 Product: {product.get('urun_adi', 'Unknown')}")
+    print(f"👁️ Visual Description: {visual_description[:100]}...")
+    print("="*80)
+    
     if not GEMINI_API_KEY:
+        print("❌ GEMINI_API_KEY ortam değişkeni ayarlanmamış.")
         raise ValueError("GEMINI_API_KEY ortam değişkeni ayarlanmamış.")
 
     try:
-        # STEP 1: Tag Generation
+        # STEP 1: TAG GENERATION
+        print("\n🏷️ [STEP 1] TAG GENERATION PHASE")
+        print("-" * 50)
+        
         tag_generator = _create_tag_generator_agent()
+        print("✅ Tag Generator Agent initialized")
         
         tag_prompt = f"""
         Ürün: {product.get('urun_adi', 'Bilinmiyor')}
@@ -130,7 +151,9 @@ async def run_simple_tag_generation(product: Dict[str, Any], visual_description:
         Bu ürün için optimal e-ticaret tag'leri üret.
         """
         
+        print("🔄 Sending prompt to Tag Generator...")
         tag_response = await tag_generator.arun(message=tag_prompt)
+        print(f"✅ Tag Generator responded: {str(tag_response)[:200]}...")
         
         # Parse tag response
         try:
@@ -156,11 +179,22 @@ async def run_simple_tag_generation(product: Dict[str, Any], visual_description:
         category = tag_result.get('category', 'genel')
         confidence = tag_result.get('confidence', 0.5)
         
-        # STEP 2: Product Search & Evaluation
+        print(f"🎯 Generated Tags: {generated_tags}")
+        print(f"📂 Category: {category}")
+        print(f"📊 Confidence: {confidence:.1%}")
+        
+        # STEP 2: PRODUCT SEARCH & EVALUATION
+        print(f"\n🔍 [STEP 2] PRODUCT SEARCH & EVALUATION PHASE")
+        print("-" * 50)
+        
+        print("🔄 Searching for products with generated tags...")
         found_products = await search_ecommerce_products_async(generated_tags, limit=8)
+        print(f"📦 Found {len(found_products)} products for evaluation")
         
         if found_products:
+            print("🤖 Initializing Product Evaluator Agent...")
             evaluator = _create_product_evaluator_agent()
+            print("✅ Product Evaluator Agent initialized")
             
             evaluation_prompt = f"""
             Generated Tags: {generated_tags}
@@ -169,7 +203,9 @@ async def run_simple_tag_generation(product: Dict[str, Any], visual_description:
             Bu ürünlerden en uygun 4'ünü seç ve değerlendir.
             """
             
+            print("🔄 Sending products to evaluator...")
             eval_response = await evaluator.arun(message=evaluation_prompt)
+            print(f"✅ Evaluator responded: {str(eval_response)[:200]}...")
             
             # Parse evaluation response
             try:
@@ -199,7 +235,7 @@ async def run_simple_tag_generation(product: Dict[str, Any], visual_description:
             reasoning = "Uygun ürün bulunamadı"
             quality_score = 0.0
         
-        return {
+        final_result = {
             "tags": generated_tags,
             "confidence": confidence,
             "category": category,
@@ -209,13 +245,24 @@ async def run_simple_tag_generation(product: Dict[str, Any], visual_description:
             "quality_score": quality_score
         }
         
+        print(f"\n✅ [SUCCESS] Tag Generation Process Completed!")
+        print(f"📋 Final Result Summary:")
+        print(f"   🏷️ Tags: {len(generated_tags)} tags generated")
+        print(f"   🛍️ Products: {len(selected_products)} products selected")
+        print(f"   ⭐ Quality: {quality_score:.1%}")
+        print("="*80)
+        
+        return final_result
+        
     except Exception as e:
-        print(f"Simple tag generation error: {e}")
+        print(f"\n❌ [ERROR] Simple tag generation error: {e}")
+        print("🔄 Using fallback response...")
+        
         # Fallback: static response
         fallback_tags = ["ev_dekorasyonu", "banyo_aksesuari", "mutfak_gereci"]
         fallback_products = await search_ecommerce_products_async(fallback_tags, limit=4)
         
-        return {
+        fallback_result = {
             "tags": fallback_tags,
             "confidence": 0.5,
             "category": "genel",
@@ -223,6 +270,11 @@ async def run_simple_tag_generation(product: Dict[str, Any], visual_description:
             "visual_description_used": visual_description,
             "search_results": fallback_products
         }
+        
+        print(f"🔄 Fallback result prepared with {len(fallback_products)} products")
+        print("="*80)
+        
+        return fallback_result
 
 # Legacy functions - backward compatibility
 async def run_tag_generation_with_visual(product: Dict[str, Any], visual_description: str, session_id: str) -> Dict[str, Any]:
