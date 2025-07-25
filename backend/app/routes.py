@@ -6,6 +6,7 @@ import os
 import base64
 from io import BytesIO
 from PIL import Image
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Vertex AI SDK
 import vertexai
@@ -43,6 +44,97 @@ def generate_image_with_vertex(prompt: str, negative_prompt: str) -> str | None:
     except Exception as e:
         print(f"Error during Vertex AI image generation: {e}")
         return None
+
+
+def ask_llm_for_safer_prompt(original_representation: str) -> str:
+    """If the initial visual representation fails, ask the text LLM to create a simpler, safer version."""
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return "a generic product" # Fallback if key is missing
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key={api_key}"
+    
+    prompt_for_llm = (
+        f"The following visual description for an image generation AI failed, likely due to safety filters or being too complex: '{original_representation}'. "
+        "Please rewrite this into a shorter, simpler, safer, and more direct visual description of the core product. "
+        "Focus on the main object. Do not add extra commentary. Give me only the new description."
+    )
+    
+    payload = {"contents": [{"parts": [{"text": prompt_for_llm}]}]}
+    
+    try:
+        response = requests.post(url, json=payload, timeout=30)
+        response.raise_for_status()
+        safer_prompt = response.json()['candidates'][0]['content']['parts'][0]['text']
+        print(f"LLM generated a safer prompt: '{safer_prompt}'")
+        return safer_prompt
+    except Exception as e:
+        print(f"Could not get a safer prompt from LLM, falling back to product name. Error: {e}")
+        return "a generic, new, and clean product"
+
+
+def generate_and_encode_image(product: dict) -> dict:
+    """Task function to generate an image for a single product and add the base64 string to it. Includes a retry mechanism."""
+    
+    # --- Primary Attempt using detailed visual representation ---
+    visual_description = product.get('visual_representation')
+    if not visual_description:
+        subject = product.get('urun_adi_en') or product.get('urun_adi', 'product')
+        visual_description = f"a generic, new, and clean {subject}"
+
+    style_prompt = (
+        f"Professional product photograph of {visual_description}. "
+        "The entire product must be fully visible and centered in the frame, not cropped or cut off. "
+        "The product is perfectly isolated on a seamless, solid pure white background. "
+        "Shot in a professional photo studio with bright, soft, even commercial lighting. "
+        "Photorealistic, hyper-detailed, 4K, e-commerce style, online marketplace photo."
+    )
+    
+    negative_style_prompt = (
+        "text, words, logo, branding, labels, writing, signature, watermark, packaging with text, "
+        "people, person, human, hands, fingers, faces"
+        "clutter, messy, floor, table, shadows, complex background, real-world environment, "
+        "3D render, CGI, drawing, sketch, illustration, cartoon, painting, art, unrealistic"
+    )
+
+    base64_image = generate_image_with_vertex(
+        prompt=style_prompt,
+        negative_prompt=negative_style_prompt
+    )
+    
+    # --- Fallback Attempt if the first one fails ---
+    if base64_image is None:
+        print(f"Primary image generation failed for '{product.get('urun_adi')}', '{product.get('visual_representation')}' . Asking LLM for a safer prompt.")
+        
+        # Ask the text LLM to refine the failing prompt
+        safer_visual_description = ask_llm_for_safer_prompt(visual_description)
+        
+        # Retry with the new, safer prompt
+        safer_style_prompt = (
+            f"Professional product photograph of {safer_visual_description}. "
+            "The entire product must be fully visible and centered in the frame, not cropped or cut off. "
+            "The product is perfectly isolated on a seamless, solid pure white background. "
+            "Shot in a professional photo studio with bright, soft, even commercial lighting. "
+            "Photorealistic, hyper-detailed, 4K, e-commerce style, online marketplace photo."
+        )
+        
+        base64_image = generate_image_with_vertex(
+            prompt=safer_style_prompt,
+            negative_prompt=negative_style_prompt
+        )
+        
+        # If it still fails, use a final, super-safe fallback
+        if base64_image is None:
+            print("LLM-assisted retry also failed. Using a generic prompt as a last resort.")
+            subject = product.get('urun_adi_en') or product.get('urun_adi', 'product')
+            super_safe_prompt = f"Professional product photograph of a generic {subject}."
+            base64_image = generate_image_with_vertex(
+                prompt=super_safe_prompt,
+                negative_prompt=negative_style_prompt
+            )
+
+    product['image_base64'] = base64_image
+    return product
 
 
 @router.post("/gemini_suggestions")
@@ -95,38 +187,25 @@ def gemini_suggestions(req: DescriptionRequest):
 
         print(products)
         
-        # --- Image Generation ---
-        for product in products:
-            visual_description = product.get('visual_representation')
-
-            if not visual_description:
-                subject = product.get('urun_adi_en') or product.get('urun_adi', 'product')
-                visual_description = f"a generic, new, and clean {subject}"
+        # --- Concurrent Image Generation ---
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            # Submit all image generation tasks to the thread pool
+            future_to_product = {executor.submit(generate_and_encode_image, p): p for p in products}
             
-            # YENİ PROMPT: Detaylı görsel tanımı ve sabit sanat stilini birleştirirken, ürünün tamamının görünmesi gerektiğini vurgular.
-            style_prompt = (
-                f"Professional product photograph of {visual_description}. "
-                "The entire product must be fully visible and centered in the frame, not cropped or cut off. "
-                "The product is perfectly isolated on a seamless, solid pure white background. "
-                "Shot in a professional photo studio with bright, soft, even commercial lighting. "
-                "Photorealistic, hyper-detailed, 4K, e-commerce style, online marketplace photo."
-            )
-            
-            # NEGATİF PROMPT: Aynı kalır.
-            negative_style_prompt = (
-                "text, words, logo, branding, labels, writing, signature, watermark, packaging with text, "
-                "people, person, human, hands, fingers,"
-                "clutter, messy, floor, table, shadows, complex background, real-world environment, "
-                "3D render, CGI, drawing, sketch, illustration, cartoon, painting, art, unrealistic"
-            )
+            # Collect results as they complete
+            updated_products = []
+            for future in as_completed(future_to_product):
+                try:
+                    updated_product = future.result()
+                    updated_products.append(updated_product)
+                except Exception as exc:
+                    print(f"A product image generation task generated an exception: {exc}")
+                    # Optionally, you can add the original product without an image
+                    original_product = future_to_product[future]
+                    original_product['image_base64'] = None
+                    updated_products.append(original_product)
 
-            base64_image = generate_image_with_vertex(
-                prompt=style_prompt,
-                negative_prompt=negative_style_prompt
-            )
-            product['image_base64'] = base64_image
-
-        return {"products": products}
+        return {"products": updated_products}
 
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=f"API request failed: {e}")
