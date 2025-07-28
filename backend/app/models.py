@@ -32,6 +32,7 @@ class TagGenerationResponse(BaseModel):
     category: str
     reasoning: str
     visual_description_used: str  # Hangi visual description kullanıldığını track etmek için
+    search_results: Optional[List[dict]] = None  # Bulunan ürünler
 
 # E-ticaret için yeni modeller
 class EcommerceProduct(BaseModel):
@@ -64,3 +65,27 @@ class SearchResponse(BaseModel):
     total_found: int
     search_tags: List[str]
     execution_time: Optional[float] = None
+
+# A/B Test models
+class ABTestRequest(BaseModel):
+    """A/B test başlatma isteği"""
+    product_id: str
+    test_field: str  # 'title' or 'description' 
+    a_variant: str
+    b_variant: str
+    start_date: str
+
+class ABTestInfo(BaseModel):
+    """A/B test bilgileri"""
+    product_id: str
+    test_field: str
+    a_variant: str
+    b_variant: str
+    start_date: str
+    is_active: bool = True
+
+class ABTestResponse(BaseModel):
+    """A/B test durumu response"""
+    success: bool
+    message: str
+    test_id: Optional[str] = None

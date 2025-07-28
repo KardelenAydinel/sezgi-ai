@@ -8,6 +8,9 @@ import requests
 from typing import List, Dict, Any, Optional
 import asyncio
 from pathlib import Path
+import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 # --- Agno Kütüphaneleri ---
 from agno.agent import Agent
@@ -26,6 +29,102 @@ load_dotenv()
 # --- API KEY ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 MCP_SERVER_COMMAND = "fastmcp run mcp_server.py"
+
+def cosine_similarity_search(search_tags: List[str], product_data: List[Dict[str, Any]], min_threshold: float = 0.1) -> List[Dict[str, Any]]:
+    """
+    Search for products using cosine similarity between search tags and product tags.
+    This enables finding products even when tag order is different (e.g., 'bluetooth_kulaklık' matches 'kulaklık_bluetooth').
+    
+    Args:
+        search_tags: List of tags to search for
+        product_data: List of product dictionaries with 'tags' field
+        min_threshold: Minimum similarity threshold to include results
+        
+    Returns:
+        List of products sorted by similarity score
+    """
+    if not search_tags or not product_data:
+        return []
+    
+    try:
+        # Prepare text data for vectorization
+        search_text = ' '.join(search_tags)
+        product_texts = []
+        
+        for product in product_data:
+            product_tags = product.get('tags', [])
+            if isinstance(product_tags, str):
+                product_tags = json.loads(product_tags) if product_tags else []
+            product_text = ' '.join(product_tags) if product_tags else ''
+            product_texts.append(product_text)
+        
+        # Only proceed if we have product texts
+        if not any(product_texts):
+            return []
+        
+        # Combine search text with product texts for vectorization
+        all_texts = [search_text] + product_texts
+        
+        # Use character n-grams to catch partial matches like bluetooth_kulaklık vs kulaklık_bluetooth
+        vectorizer = TfidfVectorizer(
+            analyzer='char_wb',  # Character-based with word boundaries
+            ngram_range=(3, 8),  # N-gram range for character analysis
+            lowercase=True,
+            max_features=10000,
+            min_df=1  # Include terms that appear in at least 1 document
+        )
+        
+        tfidf_matrix = vectorizer.fit_transform(all_texts)
+        
+        # Calculate cosine similarity between search query (first vector) and all products
+        search_vector = tfidf_matrix[0]
+        product_vectors = tfidf_matrix[1:]
+        
+        similarities = cosine_similarity(search_vector, product_vectors).flatten()
+        
+        # Create results with similarity scores
+        results = []
+        for i, product in enumerate(product_data):
+            similarity_score = similarities[i]
+            
+            # Boost score for exact tag matches
+            product_tags = product.get('tags', [])
+            if isinstance(product_tags, str):
+                product_tags = json.loads(product_tags) if product_tags else []
+            
+            exact_matches = set(search_tags) & set(product_tags)
+            if exact_matches:
+                similarity_score *= (1.0 + len(exact_matches) * 0.3)
+            
+            # Apply minimum threshold
+            if similarity_score > min_threshold:
+                product_with_score = product.copy()
+                product_with_score['similarity_score'] = float(similarity_score)
+                results.append(product_with_score)
+        
+        # Sort by similarity score
+        results.sort(key=lambda x: x['similarity_score'], reverse=True)
+        return results
+        
+    except Exception as e:
+        print(f"🔍 Cosine similarity error: {e}")
+        # Fallback to simple tag intersection
+        results = []
+        for product in product_data:
+            product_tags = product.get('tags', [])
+            if isinstance(product_tags, str):
+                product_tags = json.loads(product_tags) if product_tags else []
+            
+            matching_tags = set(search_tags) & set(product_tags)
+            similarity_score = len(matching_tags) / max(len(search_tags), 1)
+            
+            if similarity_score > min_threshold:
+                product_with_score = product.copy()
+                product_with_score['similarity_score'] = similarity_score
+                results.append(product_with_score)
+        
+        results.sort(key=lambda x: x['similarity_score'], reverse=True)
+        return results
 
 def _create_tag_generator_agent() -> Agent:
     """Step 1: Visual description'dan tag'ler üretir"""
@@ -66,7 +165,7 @@ def _create_product_evaluator_agent() -> Agent:
             "Sonucu JSON formatında döndür:",
             "{'selected_products': [product_list], 'reasoning': 'seçim gerekçesi', 'quality_score': 0.8}"
         ],
-        tools=[],
+        tools=[cosine_similarity_search],
         monitoring=False,
     )
     
@@ -217,15 +316,47 @@ async def search_ecommerce_products_fallback(tags: List[str], limit: int = 8) ->
         print(f"   ❌ Fallback also failed: {fallback_error}")
         return []
 
-# Main search function that tries MCP first, then fallback
+# Main search function that tries MCP first, then fallback, then applies cosine similarity
 async def search_ecommerce_products_async(tags: List[str], limit: int = 8) -> List[dict]:
-    """Main search function: MCP first, fallback second"""
+    """Main search function: MCP first, fallback second, cosine similarity filtering"""
     try:
-        # İlk MCP Agent ile dene
-        return await search_ecommerce_products_via_mcp_agent(tags, limit)
+        print(f"🔍 [STEP 1] Getting all products from MCP...")
+        # İlk önce daha fazla ürün iste (cosine similarity filtreleme için)
+        all_products = await search_ecommerce_products_via_mcp_agent(tags, limit=limit*3)
+        
+        if not all_products:
+            print(f"   🔄 No products from MCP, trying fallback...")
+            all_products = await search_ecommerce_products_fallback(tags, limit=limit*3)
+        
+        if not all_products:
+            print(f"   ❌ No products found")
+            return []
+        
+        print(f"🔍 [STEP 2] Applying cosine similarity filtering...")
+        print(f"   📊 Input: {len(all_products)} products, target: {limit} products")
+        
+        # Cosine similarity tool'unu kullan
+        similarity_results = cosine_similarity_search(
+            search_tags=tags,
+            product_data=all_products,
+            min_threshold=0.05  # Düşük threshold ile daha fazla ürün dahil et
+        )
+        
+        # Top results'ı al
+        final_results = similarity_results[:limit]
+        
+        print(f"   ✅ Cosine similarity applied: {len(final_results)} products selected")
+        for i, product in enumerate(final_results[:3]):  # İlk 3'ünü göster
+            score = product.get('similarity_score', 0)
+            name = product.get('name', 'Unknown')
+            tags_count = len(product.get('tags', []))
+            print(f"   {i+1}. {name} (score: {score:.3f}, tags: {tags_count})")
+        
+        return final_results
+        
     except Exception as e:
-        print(f"   ⚠️ MCP method failed: {e}")
-        # Fallback'e düş
+        print(f"   ⚠️ Main search error: {e}")
+        # Final fallback
         return await search_ecommerce_products_fallback(tags, limit)
 
 async def run_simple_tag_generation(product: Dict[str, Any], visual_description: str) -> Dict[str, Any]:
@@ -311,7 +442,7 @@ async def run_simple_tag_generation(product: Dict[str, Any], visual_description:
             print("🤖 Initializing Product Evaluator Agent...")
             evaluator = _create_product_evaluator_agent()
             print("✅ Product Evaluator Agent initialized")
-            
+    
             # Ürün listesini kısalt - sadece önemli alanlar
             simplified_products = []
             for product in found_products[:8]:  # Max 8 ürün
@@ -356,13 +487,50 @@ async def run_simple_tag_generation(product: Dict[str, Any], visual_description:
                 print(f"Evaluation parsing error: {e}")
                 eval_result = {"selected_products": found_products[:4], "reasoning": "Parsing hatası, ilk 4 ürün seçildi", "quality_score": 0.7}
             
-            selected_products = eval_result.get('selected_products', found_products[:4])
+            # Evaluator'ın seçtiği ürünlerin ID'lerini al
+            evaluator_selected = eval_result.get('selected_products', found_products[:4])
+            selected_ids = set()
+            
+            # Evaluator sonucundan ID'leri çıkar
+            for product in evaluator_selected:
+                if isinstance(product, dict):
+                    selected_ids.add(product.get('id', ''))
+                else:
+                    # String veya başka format olabilir
+                    try:
+                        product_data = json.loads(str(product)) if isinstance(product, str) else product
+                        selected_ids.add(product_data.get('id', ''))
+                    except:
+                        pass
+            
+            # Orijinal found_products'tan similarity score'ları koruyarak seç
+            selected_products = []
+            for product in found_products:
+                if product.get('id') in selected_ids or len(selected_products) < 4:
+                    selected_products.append(product)
+                if len(selected_products) >= 4:
+                    break
+            
+            # Eğer yeterli ürün yoksa, ilk 4'ünü al
+            if len(selected_products) < 4:
+                selected_products = found_products[:4]
+            
+            # Similarity score'a göre sırala (en yüksekten en düşüğe)
+            selected_products.sort(key=lambda x: x.get('similarity_score', 0), reverse=True)
+            
             reasoning = eval_result.get('reasoning', 'Ürünler başarıyla seçildi')
             quality_score = eval_result.get('quality_score', 0.7)
         else:
             selected_products = []
             reasoning = "Uygun ürün bulunamadı"
             quality_score = 0.0
+        
+        # Similarity score debug bilgisi ekle
+        print(f"\n📊 [DEBUG] Final products with similarity scores:")
+        for i, product in enumerate(selected_products):
+            score = product.get('similarity_score', 0)
+            name = product.get('name', 'Unknown')
+            print(f"   {i+1}. {name}: {score:.3f}")
         
         final_result = {
             "tags": generated_tags,

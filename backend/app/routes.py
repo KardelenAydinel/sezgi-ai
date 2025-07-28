@@ -26,7 +26,8 @@ from vertexai.preview.vision_models import ImageGenerationModel
 # Import agent module and models
 from app.agent import process_product_for_tags, run_tag_generation_with_visual
 from app.models import (ProductCard, ProductCollection, TagGenerationRequest, 
-                       TagGenerationResponse, EcommerceProduct, SearchRequest, SearchResponse)
+                       TagGenerationResponse, EcommerceProduct, SearchRequest, SearchResponse,
+                       ABTestRequest, ABTestInfo, ABTestResponse)
 
 # Import database functions
 from app.database import (
@@ -209,6 +210,120 @@ def search_ecommerce_products(req: SearchRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Search failed: {e}")
 
+# A/B Test endpoints
+@router.post("/ab-tests/start", response_model=ABTestResponse)
+async def start_ab_test(req: ABTestRequest):
+    """
+    A/B test başlat ve database'e kaydet
+    
+    Args:
+        req: A/B test başlatma isteği
+        
+    Returns:
+        Test başlatma durumu
+    """
+    try:
+        # Simple file-based storage for demo (production'da proper database kullan)
+        test_data = {
+            "product_id": req.product_id,
+            "test_field": req.test_field,
+            "a_variant": req.a_variant,
+            "b_variant": req.b_variant,
+            "start_date": req.start_date,
+            "is_active": True
+        }
+        
+        # Database'e kaydet (şimdilik basit JSON file)
+        import json
+        from pathlib import Path
+        
+        ab_tests_file = Path(__file__).parent / "data" / "ab_tests.json"
+        ab_tests_file.parent.mkdir(exist_ok=True)
+        
+        # Load existing tests
+        active_tests = {}
+        if ab_tests_file.exists():
+            with open(ab_tests_file, 'r') as f:
+                active_tests = json.load(f)
+        
+        # Add new test
+        active_tests[req.product_id] = test_data
+        
+        # Save back to file
+        with open(ab_tests_file, 'w') as f:
+            json.dump(active_tests, f, indent=2)
+        
+        return ABTestResponse(
+            success=True,
+            message="A/B test başarıyla başlatıldı",
+            test_id=req.product_id
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"A/B test başlatma hatası: {e}")
+
+@router.get("/ab-tests/active")
+async def get_active_tests():
+    """
+    Aktif A/B testleri getir
+    
+    Returns:
+        Aktif testlerin listesi
+    """
+    try:
+        import json
+        from pathlib import Path
+        
+        ab_tests_file = Path(__file__).parent / "data" / "ab_tests.json"
+        
+        if not ab_tests_file.exists():
+            return {}
+        
+        with open(ab_tests_file, 'r') as f:
+            active_tests = json.load(f)
+        
+        # Sadece aktif testleri döndür
+        return {k: v for k, v in active_tests.items() if v.get('is_active', True)}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Aktif testleri getirme hatası: {e}")
+
+@router.delete("/ab-tests/{product_id}")
+async def stop_ab_test(product_id: str):
+    """
+    A/B testi durdur
+    
+    Args:
+        product_id: Test durdurulacak ürün ID'si
+        
+    Returns:
+        Test durdurma durumu
+    """
+    try:
+        import json
+        from pathlib import Path
+        
+        ab_tests_file = Path(__file__).parent / "data" / "ab_tests.json"
+        
+        if not ab_tests_file.exists():
+            return ABTestResponse(success=False, message="Test bulunamadı")
+        
+        with open(ab_tests_file, 'r') as f:
+            active_tests = json.load(f)
+        
+        if product_id in active_tests:
+            active_tests[product_id]['is_active'] = False
+            
+            with open(ab_tests_file, 'w') as f:
+                json.dump(active_tests, f, indent=2)
+            
+            return ABTestResponse(success=True, message="A/B test durduruldu")
+        else:
+            return ABTestResponse(success=False, message="Test bulunamadı")
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"A/B test durdurma hatası: {e}")
+
 @router.get("/ecommerce_products", response_model=SearchResponse)
 def get_all_ecommerce_products_endpoint(limit: int = 20):
     """
@@ -260,7 +375,8 @@ async def generate_tags_with_visual(req: TagGenerationRequest):
             confidence=result.get('confidence', 0.0),
             category=result.get('category', 'unknown'),
             reasoning=result.get('reasoning', 'No reasoning provided'),
-            visual_description_used=result.get('visual_description_used', req.visual_description)
+            visual_description_used=result.get('visual_description_used', req.visual_description),
+            search_results=result.get('search_results', [])
         )
         
     except Exception as e:
