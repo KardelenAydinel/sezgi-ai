@@ -69,7 +69,20 @@ def resize_image(image_bytes: bytes, size: tuple[int, int] = (256, 256)) -> byte
 
 def generate_image_with_vertex(prompt: str, negative_prompt: str) -> str | None:
     """Generates an image using Vertex AI, resizes it, and returns it as a Base64 encoded string."""
+    
+    # Check if required environment variables are set
+    project_id = os.getenv("GCP_PROJECT_ID")
+    location = os.getenv("GCP_REGION")
+    
+    if not all([project_id, location]):
+        print("Warning: GCP_PROJECT_ID and GCP_REGION environment variables not set. Image generation disabled.")
+        return None
+    
     try:
+        # Initialize Vertex AI
+        import vertexai
+        vertexai.init(project=project_id, location=location)
+        
         model = ImageGenerationModel.from_pretrained("imagegeneration@006")
         response = model.generate_images(
             prompt=prompt,
@@ -176,7 +189,7 @@ def generate_and_encode_image(product: dict) -> dict:
     product['image_base64'] = base64_image
     return product
 
-@router.post("/search_ecommerce", response_model=SearchResponse)
+@router.post("/search_ecommerce")
 def search_ecommerce_products(req: SearchRequest):
     """
     Tag'lere göre e-ticaret ürünlerinde arama yap
@@ -198,14 +211,55 @@ def search_ecommerce_products(req: SearchRequest):
             category=req.category
         )
         
+        # Convert EcommerceProduct objects to dict format for image generation
+        products_dict = []
+        for product in products:
+            product_dict = {
+                "urun_adi": product.name,
+                "urun_aciklama": product.description,
+                "urun_adi_en": product.name,  # Using same name for English
+                "visual_representation": f"a {product.name.lower()}, {product.description}",
+                "price": product.price,
+                "currency": product.currency,
+                "brand": product.brand,
+                "category": product.category,
+                "subcategory": product.subcategory,
+                "tags": product.tags,
+                "rating": product.rating,
+                "review_count": product.review_count,
+                "image_base64": None  # Will be populated by image generation
+            }
+            products_dict.append(product_dict)
+        
+        # Generate images for all products concurrently
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            # Submit all image generation tasks to the thread pool
+            future_to_product = {executor.submit(generate_and_encode_image, p): p for p in products_dict}
+            
+            # Collect results as they complete
+            updated_products = []
+            for future in as_completed(future_to_product):
+                try:
+                    updated_product = future.result()
+                    updated_products.append(updated_product)
+                    print(f"Generated image for: {updated_product.get('urun_adi')}")
+                except Exception as exc:
+                    print(f"Image generation failed for product: {exc}")
+                    # Add the original product without an image
+                    original_product = future_to_product[future]
+                    original_product['image_base64'] = None
+                    updated_products.append(original_product)
+        
         execution_time = time.time() - start_time
         
-        return SearchResponse(
-            products=products,
-            total_found=len(products),
-            search_tags=req.tags,
-            execution_time=execution_time
-        )
+        return {
+            "products": updated_products,
+            "total_found": len(updated_products),
+            "search_tags": req.tags,
+            "execution_time": execution_time
+        }
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Search failed: {e}")
