@@ -504,6 +504,67 @@ def generate_tags(req: ProductTagRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Tag generation failed: {e}")
 
+@router.post("/similar_products")
+async def get_similar_products(req: ProductTagRequest):
+    """
+    Find similar products from database using tag generation
+    
+    Args:
+        req: Request containing product information
+        
+    Returns:
+        Similar products from the database
+    """
+    try:
+        # Generate tags for the input product
+        product_with_tags = process_product_for_tags(req.product)
+        
+        # Extract tags for searching
+        tags = product_with_tags.get('tags', [])
+        
+        if not tags:
+            return {"success": False, "message": "No tags generated for product", "products": []}
+        
+        # Use agent-based async search to fetch similar products
+        from app.agent import search_ecommerce_products_async
+        similar_products_data = await search_ecommerce_products_async(tags, limit=8)
+
+        
+        # Optionally limit number of cards if client requested; for now, return all matches
+        # similar_products_data = similar_products_data[:4]
+        
+        # Convert to the expected format
+        products_data = []
+        for product_dict in similar_products_data:
+            product_data = {
+                "urun_adi": product_dict['name'],
+                "urun_aciklama": product_dict['description'],
+                "urun_adi_en": product_dict['name'],  # Using same name for English
+                "visual_representation": f"A product image of {product_dict['name']}",
+                "image_base64": None,  # We'll use image_url instead
+                "image_url": product_dict['image_url'],
+                "price": product_dict['price'],
+                "currency": product_dict['currency'],
+                "brand": product_dict['brand'],
+                "category": product_dict['category'],
+                "tags": product_dict['tags'],
+                "rating": product_dict.get('rating'),
+                "review_count": product_dict.get('review_count'),
+                "subcategory": product_dict.get('subcategory'),
+                "similarity_score": product_dict.get('similarity_score', 0)
+            }
+            products_data.append(product_data)
+        
+        return {
+            "success": True,
+            "number_of_cards": len(products_data),
+            "products": products_data,
+            "generated_tags": tags
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Similar products search failed: {e}")
+
 @router.post("/gemini_suggestions")
 def gemini_suggestions(req: DescriptionRequest):
     # --- Environment Variable Checks ---

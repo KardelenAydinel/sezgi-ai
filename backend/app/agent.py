@@ -583,16 +583,29 @@ async def run_tag_generation(product: Dict[str, Any], session_id: str) -> Dict[s
     visual_description = product.get('visual_representation', 'Görsel açıklama bulunamadı')
     return await run_simple_tag_generation(product, visual_description)
 
+def _slugify(text: str) -> str:
+    import re, unicodedata
+    text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('ascii')
+    text = re.sub(r'[^a-zA-Z0-9\s]', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip().lower()
+    return text.replace(' ', '_')
+
+
 def generate_tags_for_product(product: Dict[str, Any]) -> List[str]:
-    """Static tag generation fallback"""
-    static_tags = [
-        "ev_dekorasyonu",
-        "banyo_aksesuari", 
-        "mutfak_gereci",
-        "temizlik_urun",
-        "yapi_malzeme"
-    ]
-    return static_tags[:5]
+    """Generate simple heuristic tags from product name and description."""
+    name = product.get('urun_adi') or product.get('name') or ''
+    desc = product.get('urun_aciklama') or product.get('description') or ''
+    combined = f"{name} {desc}"
+    # Extract unique words longer than 2 characters
+    words = {_slugify(w) for w in combined.split() if len(w) > 2}
+    # Remove empty strings and generic stopwords
+    stopwords = {'the', 'and', 'with', 'for', 'this', 'that', 'those', 'these', 'urun', 'product', 'kulaklik'}
+    tags = [w for w in words if w and w not in stopwords]
+    # Ensure at least some generic tag if empty
+    if not tags:
+        tags = ['genel_urun']
+    # Limit to 7 tags
+    return tags[:7]
 
 def process_product_for_tags(product: Dict[str, Any]) -> Dict[str, Any]:
     """Process a product and add generated tags to it"""

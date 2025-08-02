@@ -6,5 +6,13 @@
     "b_variant": "Premium Bluetooth Kulakl\u0131k - Yeni Nesil",
     "start_date": "2025-07-27T17:42:09.095",
     "is_active": true
+  },
+  "2": {
+    "product_id": "2",
+    "test_field": "title",
+    "a_variant": "Sport Bluetooth Kulakl\u0131k",
+    "b_variant": "Sport Bluetooth Kulakl\u0131k - Yeni Nesil",
+    "start_date": "2025-07-28T20:36:45.336",
+    "is_active": true
   }
 }
