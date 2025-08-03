@@ -669,7 +669,7 @@ def gemini_suggestions(req: DescriptionRequest):
     )
 
     combined_prompt = f"{system_instructions}\n\nKullanıcı tarifi: '{req.description}'"
-    text_generation_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    text_generation_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key={api_key}"
     payload = {"contents": [{"parts": [{"text": combined_prompt}]}]}
 
     try:

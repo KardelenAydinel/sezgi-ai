@@ -157,14 +157,15 @@ def _create_product_evaluator_agent() -> Agent:
         role="Tag'lere göre ürün bulur ve kalitesini değerlendirir",
         model=Gemini(id="gemini-2.5-flash", api_key=GEMINI_API_KEY),
         instructions=[
-            "Sen bir ürün değerlendirme uzmanısın. Verilen tag'ler ve bulunan ürünler için:",
+            "Sen bir ürün sıralama uzmanısın. Verilen tag'ler ve bulunan ürünler için:",
             "1. Her ürünün tag'lerle uyumunu değerlendir",
             "2. Fiyat ve kalite dengesine bak",
             "3. Rating'i yüksek olanları öncelik ver",
             "Sonucu sıralı bir JSON formatında döndür:",
-            "{'selected_products': [product_list], 'reasoning': 'seçim gerekçesi', 'quality_score': 0.8}"
+            "{'selected_products': [product_list], 'reasoning': 'seçim gerekçesi', 'quality_score': 0.8}",
+            "Sana verilen ürün listesinden asla ürün silme. Bütün ürünleri döndür. Sen sadece sıralama yapıyorsun."
         ],
-        tools=[cosine_similarity_search],
+        #tools=[cosine_similarity_search],
         monitoring=False,
     )
     
