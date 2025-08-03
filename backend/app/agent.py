@@ -144,7 +144,7 @@ def _create_tag_generator_agent() -> Agent:
             "{'tags': ['tag1', 'tag2', 'tag3'], 'category': 'kategori', 'confidence': 0.9}"
         ],
         tools=[],
-        monitoring=False,
+        debug_mode=True,
     )
     
     return tag_generator
@@ -158,11 +158,10 @@ def _create_product_evaluator_agent() -> Agent:
         model=Gemini(id="gemini-2.5-flash", api_key=GEMINI_API_KEY),
         instructions=[
             "Sen bir ürün değerlendirme uzmanısın. Verilen tag'ler ve bulunan ürünler için:",
-            "1. En uygun 4 ürünü seç",
-            "2. Her ürünün tag'lerle uyumunu değerlendir",
-            "3. Fiyat ve kalite dengesine bak",
-            "4. Rating'i yüksek olanları öncelik ver",
-            "Sonucu JSON formatında döndür:",
+            "1. Her ürünün tag'lerle uyumunu değerlendir",
+            "2. Fiyat ve kalite dengesine bak",
+            "3. Rating'i yüksek olanları öncelik ver",
+            "Sonucu sıralı bir JSON formatında döndür:",
             "{'selected_products': [product_list], 'reasoning': 'seçim gerekçesi', 'quality_score': 0.8}"
         ],
         tools=[cosine_similarity_search],
@@ -197,7 +196,8 @@ async def search_ecommerce_products_via_mcp_agent(tags: List[str], limit: int = 
                     "search_ecommerce_products_by_tags tool'unu kullanarak database'de ürün ararsın.",
                     "Verilen tag'ler ve limit ile arama yapar, sonuçları JSON formatında dönersin."
                 ],
-                markdown=False
+                markdown=False,
+                debug_mode=True
             )
             
             # Agent'a arama yaptır
@@ -211,7 +211,7 @@ async def search_ecommerce_products_via_mcp_agent(tags: List[str], limit: int = 
             
             print(f"   🔄 Calling MCP agent with search request...")
             mcp_response = await search_agent.arun(message=search_prompt)
-            print(f"   📦 MCP Agent Response received: {str(mcp_response)[:150]}...")
+            print(f"   📦 MCP Agent Response received: {str(mcp_response)}...")
             
             # MCP response'u parse et
             if hasattr(mcp_response, 'content'):
@@ -221,58 +221,73 @@ async def search_ecommerce_products_via_mcp_agent(tags: List[str], limit: int = 
             
             print(f"   🔧 Parsing MCP response...")
             
-            # MCP'den dönen response genellikle string olur, içinde ürün bilgileri var
-            # Response'u parse etmeye çalış
+            # MCP response'u parse et - JSON formatını direkt ara
             products_dict = []
             
-            # MCP response'u parse et
-            products_dict = []
-            
-            if "Found" in response_content and "products" in response_content:
-                print(f"   ✅ MCP search completed successfully")
+            try:
+                import re
+                import json
                 
-                # MCP response'tan JSON parse etmeye çalış
-                try:
-                    import re
-                    import json
-                    # JSON array'i bul
-                    json_match = re.search(r'\[.*\]', response_content, re.DOTALL)
+                # İlk önce markdown code block içindeki JSON'u dene (```json ... ```)
+                json_block_match = re.search(r'```json\s*(\{.*?\})\s*```', response_content, re.DOTALL)
+                if json_block_match:
+                    json_str = json_block_match.group(1)
+                    print(f"   📝 Found JSON in markdown block")
+                else:
+                    # JSON object veya array'i bul
+                    json_match = re.search(r'[\{\[].*[\}\]]', response_content, re.DOTALL)
                     if json_match:
                         json_str = json_match.group()
-                        products_data = json.loads(json_str)
+                        print(f"   📝 Found JSON data")
+                    else:
+                        json_str = None
+                        print(f"   ⚠️ No JSON found in response")
+                
+                if json_str:
+                    parsed_data = json.loads(json_str)
+                    
+                    # MCP response wrapper'ını handle et
+                    if isinstance(parsed_data, dict) and 'search_ecommerce_products_by_tags_response' in parsed_data:
+                        products_data = parsed_data['search_ecommerce_products_by_tags_response'].get('result', [])
+                        print(f"   📦 Found MCP wrapped response with {len(products_data)} products")
+                    elif isinstance(parsed_data, list):
+                        products_data = parsed_data
+                        print(f"   📝 Found direct array with {len(products_data)} products")
+                    else:
+                        products_data = []
+                        print(f"   ⚠️ Unexpected JSON format: {type(parsed_data)}")
+                    
+                    # Her product'ı dict'e çevir (EcommerceProduct'tan gelebilir)
+                    for product in products_data:
+                        if isinstance(product, dict):
+                            products_dict.append(product)
+                        else:
+                            # Object to dict conversion
+                            product_dict = {
+                                'id': getattr(product, 'id', ''),
+                                'name': getattr(product, 'name', ''),
+                                'description': getattr(product, 'description', ''),
+                                'price': getattr(product, 'price', 0),
+                                'currency': getattr(product, 'currency', 'TL'),
+                                'image_url': getattr(product, 'image_url', ''),
+                                'tags': getattr(product, 'tags', []),
+                                'category': getattr(product, 'category', ''),
+                                'subcategory': getattr(product, 'subcategory', ''),
+                                'brand': getattr(product, 'brand', ''),
+                                'stock': getattr(product, 'stock', 0),
+                                'rating': getattr(product, 'rating', None),
+                                'review_count': getattr(product, 'review_count', None)
+                            }
+                            products_dict.append(product_dict)
+                    
+                    print(f"   ✅ Successfully parsed {len(products_dict)} products from MCP JSON")
+                else:
+                    print(f"   ⚠️ No valid JSON found in MCP response")
+                    print(f"   📄 Response content: {response_content[:300]}...")
                         
-                        # Her product'ı dict'e çevir (EcommerceProduct'tan gelebilir)
-                        for product in products_data:
-                            if isinstance(product, dict):
-                                products_dict.append(product)
-                            else:
-                                # Object to dict conversion
-                                product_dict = {
-                                    'id': getattr(product, 'id', ''),
-                                    'name': getattr(product, 'name', ''),
-                                    'description': getattr(product, 'description', ''),
-                                    'price': getattr(product, 'price', 0),
-                                    'currency': getattr(product, 'currency', 'TL'),
-                                    'image_url': getattr(product, 'image_url', ''),
-                                    'tags': getattr(product, 'tags', []),
-                                    'category': getattr(product, 'category', ''),
-                                    'subcategory': getattr(product, 'subcategory', ''),
-                                    'brand': getattr(product, 'brand', ''),
-                                    'stock': getattr(product, 'stock', 0),
-                                    'rating': getattr(product, 'rating', None),
-                                    'review_count': getattr(product, 'review_count', None)
-                                }
-                                products_dict.append(product_dict)
-                        
-                        print(f"   🔧 Successfully parsed {len(products_dict)} products from MCP JSON")
-                        
-                except (json.JSONDecodeError, AttributeError) as parse_error:
-                    print(f"   ⚠️ JSON parsing failed: {parse_error}")
-                    print(f"   📄 Raw response: {response_content[:300]}...")
-                    products_dict = []
-            else:
-                print(f"   ⚠️ Unexpected MCP response format")
-                print(f"   📄 Response content: {response_content[:300]}...")
+            except (json.JSONDecodeError, AttributeError) as parse_error:
+                print(f"   ⚠️ JSON parsing failed: {parse_error}")
+                print(f"   📄 Raw response: {response_content[:300]}...")
                 products_dict = []
             
             print(f"   📦 MCP Agent search returned {len(products_dict)} products")
@@ -317,7 +332,7 @@ async def search_ecommerce_products_fallback(tags: List[str], limit: int = 8) ->
         return []
 
 # Main search function that tries MCP first, then fallback, then applies cosine similarity
-async def search_ecommerce_products_async(tags: List[str], limit: int = 8) -> List[dict]:
+async def search_ecommerce_products_async(tags: List[str], limit: int = 1000) -> List[dict]:
     """Main search function: MCP first, fallback second, cosine similarity filtering"""
     try:
         print(f"🔍 [STEP 1] Getting all products from MCP...")
@@ -416,11 +431,34 @@ async def run_simple_tag_generation(product: Dict[str, Any], visual_description:
                     tag_content = tag_content.strip()[7:-3].strip()
                 tag_result = json.loads(tag_content)
             else:
-                tag_result = tag_response if isinstance(tag_response, dict) else {"tags": ["ev_dekorasyonu"], "category": "genel", "confidence": 0.5}
+                # Smart fallback for non-dict response
+                if isinstance(tag_response, dict):
+                    tag_result = tag_response
+                else:
+                    product_name = product.get('urun_adi', '').lower()
+                    if 'kulaklık' in product_name or 'headphone' in product_name:
+                        tag_result = {"tags": ["bluetooth_kulaklik"], "category": "elektronik", "confidence": 0.5}
+                    else:
+                        tag_result = {"tags": ["genel_urun"], "category": "genel", "confidence": 0.5}
                 
         except (json.JSONDecodeError, AttributeError) as e:
             print(f"Tag parsing error: {e}")
-            tag_result = {"tags": ["ev_dekorasyonu", "banyo_aksesuari"], "category": "genel", "confidence": 0.5}
+            # Smart fallback for JSON parsing errors
+            product_name = product.get('urun_adi', '').lower()
+            product_desc = product.get('urun_aciklama', '').lower()
+            all_text = f"{product_name} {product_desc} {visual_description.lower()}"
+            
+            # Generate appropriate fallback tags based on content
+            if any(keyword in all_text for keyword in ['kulaklık', 'headphone', 'bluetooth', 'kablosuz', 'ses']):
+                fallback_tags = ['bluetooth_kulaklik', 'kablosuz_kulaklik']
+            elif any(keyword in all_text for keyword in ['sehpa', 'masa', 'mobilya', 'ahşap']):
+                fallback_tags = ['mobilya', 'ev_dekorasyonu']
+            elif any(keyword in all_text for keyword in ['mutfak', 'kitchen']):
+                fallback_tags = ['mutfak_gereci', 'ev_aletleri']
+            else:
+                fallback_tags = ['genel_urun', 'ev_gerecleri']
+                
+            tag_result = {"tags": fallback_tags, "category": "genel", "confidence": 0.5}
         
         generated_tags = tag_result.get('tags', [])
         category = tag_result.get('category', 'genel')
@@ -445,12 +483,12 @@ async def run_simple_tag_generation(product: Dict[str, Any], visual_description:
     
             # Ürün listesini kısalt - sadece önemli alanlar
             simplified_products = []
-            for product in found_products[:8]:  # Max 8 ürün
+            for product in found_products:
                 simplified = {
                     'id': product.get('id', ''),
                     'name': product.get('name', ''),
                     'price': product.get('price', 0),
-                    'tags': product.get('tags', [])[:5],  # Max 5 tag
+                    'tags': product.get('tags', [])[:8],  # Max 8 tag
                     'category': product.get('category', '')
                 }
                 simplified_products.append(simplified)
@@ -459,7 +497,7 @@ async def run_simple_tag_generation(product: Dict[str, Any], visual_description:
             Generated Tags: {generated_tags}
             Found Products (simplified): {json.dumps(simplified_products, ensure_ascii=False)}
             
-            Bu ürünlerden en uygun 4'ünü seç ve değerlendir.
+            Bu ürünleri uygunluğuna göre değerlendir.
             JSON formatında yanıt ver: {{"selected_products": [...], "reasoning": "...", "quality_score": 0.8}}
             """
             
@@ -481,14 +519,14 @@ async def run_simple_tag_generation(product: Dict[str, Any], visual_description:
                         eval_content = eval_content.strip()[7:-3].strip()
                     eval_result = json.loads(eval_content)
                 else:
-                    eval_result = {"selected_products": found_products[:4], "reasoning": "Standart seçim", "quality_score": 0.7}
+                    eval_result = {"selected_products": found_products, "reasoning": "Standart seçim", "quality_score": 0.7}
                     
             except (json.JSONDecodeError, AttributeError) as e:
                 print(f"Evaluation parsing error: {e}")
-                eval_result = {"selected_products": found_products[:4], "reasoning": "Parsing hatası, ilk 4 ürün seçildi", "quality_score": 0.7}
+                eval_result = {"selected_products": found_products, "reasoning": "Parsing hatası, ilk 4 ürün seçildi", "quality_score": 0.7}
             
             # Evaluator'ın seçtiği ürünlerin ID'lerini al
-            evaluator_selected = eval_result.get('selected_products', found_products[:4])
+            evaluator_selected = eval_result.get('selected_products', found_products)
             selected_ids = set()
             
             # Evaluator sonucundan ID'leri çıkar
@@ -506,14 +544,13 @@ async def run_simple_tag_generation(product: Dict[str, Any], visual_description:
             # Orijinal found_products'tan similarity score'ları koruyarak seç
             selected_products = []
             for product in found_products:
-                if product.get('id') in selected_ids or len(selected_products) < 4:
+                if product.get('id') in selected_ids:
                     selected_products.append(product)
-                if len(selected_products) >= 4:
-                    break
+
             
-            # Eğer yeterli ürün yoksa, ilk 4'ünü al
+            """            # Eğer yeterli ürün yoksa, ilk 4'ünü al
             if len(selected_products) < 4:
-                selected_products = found_products[:4]
+                selected_products = found_products[:4]"""
             
             # Similarity score'a göre sırala (en yüksekten en düşüğe)
             selected_products.sort(key=lambda x: x.get('similarity_score', 0), reverse=True)
@@ -555,9 +592,33 @@ async def run_simple_tag_generation(product: Dict[str, Any], visual_description:
         print(f"\n❌ [ERROR] Simple tag generation error: {e}")
         print("🔄 Using fallback response...")
         
-        # Fallback: static response
-        fallback_tags = ["ev_dekorasyonu", "banyo_aksesuari", "mutfak_gereci"]
-        fallback_products = await search_ecommerce_products_async(fallback_tags, limit=4)
+        # Smart Fallback: Extract meaningful tags from product name/description
+        fallback_tags = []
+        product_name = product.get('urun_adi', '').lower()
+        product_desc = product.get('urun_aciklama', '').lower()
+        visual_desc = visual_description.lower()
+        
+        # Extract category-specific tags based on product content
+        all_text = f"{product_name} {product_desc} {visual_desc}"
+        
+        # Electronics & Tech keywords
+        if any(keyword in all_text for keyword in ['kulaklık', 'headphone', 'bluetooth', 'kablosuz', 'ses', 'audio', 'musik', 'oyun', 'gaming']):
+            fallback_tags = ['bluetooth_kulaklik', 'kablosuz_kulaklik', 'ses_cihazi', 'elektronik']
+        # Furniture keywords  
+        elif any(keyword in all_text for keyword in ['sehpa', 'masa', 'sandalye', 'dolap', 'mobilya', 'ahşap', 'koltuk']):
+            fallback_tags = ['mobilya', 'ev_dekorasyonu', 'ahsap_mobilya', 'modern_mobilya']
+        # Kitchen keywords
+        elif any(keyword in all_text for keyword in ['mutfak', 'kitchen', 'ocak', 'buzdolabı', 'fırın', 'blender']):
+            fallback_tags = ['mutfak_gereci', 'ev_aletleri', 'yemek_hazırlık']
+        # Bathroom keywords
+        elif any(keyword in all_text for keyword in ['banyo', 'bathroom', 'duş', 'lavabo', 'tuvalet', 'hijyen']):
+            fallback_tags = ['banyo_aksesuari', 'hijyen_urunleri', 'ev_gerecleri']
+        # Default fallback
+        else:
+            fallback_tags = ['genel_urun', 'ev_gerecleri', 'gunluk_kullanim']
+            
+        print(f"🎯 Smart fallback tags generated: {fallback_tags}")
+        fallback_products = await search_ecommerce_products_async(fallback_tags)
         
         fallback_result = {
             "tags": fallback_tags,
