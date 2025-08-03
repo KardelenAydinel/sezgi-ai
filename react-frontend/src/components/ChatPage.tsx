@@ -209,7 +209,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ initialMessage }) => {
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const [hiddenRetryButtons, setHiddenRetryButtons] = useState<Set<number>>(new Set());
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [isUserAtBottom, setIsUserAtBottom] = useState(true);
@@ -309,11 +309,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ initialMessage }) => {
   };
 
   const handleRetrySearch = (messageIndex: number) => {
-    setHiddenRetryButtons(prev => {
-      const newSet = new Set(prev);
-      newSet.add(messageIndex);
-      return newSet;
-    });
     setShowSearchBar(true);
     setSearchQuery('');
   };
@@ -361,7 +356,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ initialMessage }) => {
               />
             ))}
           </ProductsContainer>
-          {message.sender === Sender.LLM && !message.fromDatabase && !hiddenRetryButtons.has(index) && (
+          {message.sender === Sender.LLM && !message.fromDatabase && (
             <RetryButton onClick={() => handleRetrySearch(index)}>
               Hiçbiri değil, tekrar tarif edeyim
             </RetryButton>
