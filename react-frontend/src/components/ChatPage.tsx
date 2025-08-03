@@ -21,18 +21,22 @@ const MessagesContainer = styled.div`
   gap: ${({ theme }) => theme.spacing.sm};
 `;
 
+const MessageWrapper = styled.div<{ sender: Sender }>`
+  display: flex;
+  flex-direction: column;
+  align-items: ${({ sender }) => (sender === Sender.USER ? 'flex-end' : 'flex-start')};
+  margin-bottom: ${({ theme }) => theme.spacing.sm};
+`;
+
 const MessageBubble = styled.div<{ sender: Sender }>`
   max-width: 70%;
   width: fit-content; // Adjust width to content size
   min-width: 60px; // Minimum width for very short messages
-  align-self: ${({ sender }) => sender === Sender.USER ? 'flex-end !important' : 'flex-start !important'};
-  margin-left: ${({ sender }) => sender === Sender.USER ? 'auto' : '0'};
-  margin-right: ${({ sender }) => sender === Sender.USER ? '0' : 'auto'};
-  background-color: ${({ sender, theme }) => 
+  background-color: ${({ sender, theme }) =>
     sender === Sender.USER ? theme.colors.primary : theme.colors.grey[200]};
-  color: ${({ sender, theme }) => 
+  color: ${({ sender, theme }) =>
     sender === Sender.USER ? theme.colors.onPrimary : theme.colors.text.primary};
-  padding: ${({ theme }) => theme.spacing.md};
+  padding: ${({ theme }) => `${theme.spacing.sm} ${theme.spacing.md}`};
   border-radius: ${({ theme }) => theme.borderRadius.lg};
   box-shadow: ${({ theme }) => theme.shadows.sm};
   word-wrap: break-word;
@@ -112,6 +116,83 @@ const LoadingIndicator = styled.div`
   align-self: flex-start;
 `;
 
+const RetryButton = styled.button`
+  width: 100%;
+  max-width: 400px;
+  margin: ${({ theme }) => theme.spacing.md} 0;
+  padding: ${({ theme }) => theme.spacing.md};
+  background-color: transparent;
+  color: ${({ theme }) => theme.colors.primary};
+  border: 2px solid ${({ theme }) => theme.colors.primary};
+  border-radius: ${({ theme }) => theme.borderRadius.lg};
+  font-weight: ${({ theme }) => theme.typography.fontWeight.medium};
+  cursor: pointer;
+  transition: all 0.2s ease;
+  align-self: flex-start;
+  
+  &:hover {
+    background-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.onPrimary};
+  }
+`;
+
+const SearchBarContainer = styled.div`
+  display: flex;
+  padding: ${({ theme }) => theme.spacing.md};
+  background-color: ${({ theme }) => theme.colors.surface};
+  border-top: 1px solid ${({ theme }) => theme.colors.grey[300]};
+  gap: ${({ theme }) => theme.spacing.sm};
+`;
+
+const SearchInput = styled.input`
+  flex: 1;
+  padding: ${({ theme }) => theme.spacing.md};
+  border: 2px solid ${({ theme }) => theme.colors.grey[300]};
+  border-radius: ${({ theme }) => theme.borderRadius.lg};
+  font-size: ${({ theme }) => theme.typography.fontSize.md};
+  outline: none;
+  
+  &:focus {
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
+`;
+
+const SearchButton = styled.button`
+  padding: ${({ theme }) => theme.spacing.md} ${({ theme }) => theme.spacing.lg};
+  background-color: ${({ theme }) => theme.colors.primary};
+  color: ${({ theme }) => theme.colors.onPrimary};
+  border: none;
+  border-radius: ${({ theme }) => theme.borderRadius.lg};
+  font-weight: ${({ theme }) => theme.typography.fontWeight.medium};
+  cursor: pointer;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background-color: ${({ theme }) => theme.colors.primary}DD;
+  }
+  
+  &:disabled {
+    background-color: ${({ theme }) => theme.colors.grey[400]};
+    cursor: not-allowed;
+  }
+`;
+
+const CloseSearchButton = styled.button`
+  padding: ${({ theme }) => theme.spacing.md};
+  background-color: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  border: 2px solid ${({ theme }) => theme.colors.grey[300]};
+  border-radius: ${({ theme }) => theme.borderRadius.lg};
+  cursor: pointer;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background-color: ${({ theme }) => theme.colors.grey[200]};
+  }
+`;
+
+
+
 interface ChatPageProps {
   initialMessage?: string;
 }
@@ -119,59 +200,75 @@ interface ChatPageProps {
 const ChatPage: React.FC<ChatPageProps> = ({ initialMessage }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [showSearchBar, setShowSearchBar] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const [hiddenRetryButtons, setHiddenRetryButtons] = useState<Set<number>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const [isUserAtBottom, setIsUserAtBottom] = useState(true);
+  const messagesRef = useRef<ChatMessage[]>([]);
 
   // Auto-scroll to bottom when new messages are added
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  const handleScroll = () => {
+    if (!messagesContainerRef.current) return;
+    const el = messagesContainerRef.current;
+    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 50;
+    setIsUserAtBottom(atBottom);
+  };
 
   useEffect(() => {
-    if (initialMessage && initialMessage.trim()) {
-      const sendInitialMessage = async () => {
-        const textToSend = initialMessage.trim();
-        if (!textToSend) return;
-
-        // Add user message
-        const userMessage: ChatMessage = {
-          sender: Sender.USER,
-          text: textToSend,
-        };
-        // If there are previous messages, append, otherwise start new chat
-        setMessages(prev => (prev.length > 0 ? [...prev, userMessage] : [userMessage]));
-        setIsLoading(true);
-
-        try {
-          const response = await sendChatMessage(textToSend);
-          
-          // Add LLM response
-          const llmMessage: ChatMessage = {
-            sender: Sender.LLM,
-            text: response.response,
-            products: response.products,
-            searchResults: response.search_results,
-            tagResult: response.tag_result,
-          };
-          setMessages(prev => [...prev, llmMessage]);
-        } catch (error) {
-          console.error('Error sending message:', error);
-          const errorMessage: ChatMessage = {
-            sender: Sender.LLM,
-            text: 'Üzgünüm, bir hata oluştu. Lütfen tekrar deneyin.',
-          };
-          setMessages(prev => [...prev, errorMessage]);
-        } finally {
-          setIsLoading(false);
-        }
-      };
-      
-      sendInitialMessage();
+    if (isUserAtBottom) {
+      scrollToBottom();
     }
-  }, [initialMessage]); 
+    messagesRef.current = messages;
+  }, [messages, isUserAtBottom]);
+
+  const sendMessage = useCallback(async (text: string) => {
+    const textToSend = text.trim();
+    if (!textToSend) return;
+
+    const userMessage: ChatMessage = {
+      sender: Sender.USER,
+      text: textToSend,
+    };
+
+    const messagesWithUser = [...messagesRef.current, userMessage];
+    setMessages(messagesWithUser);
+    setIsLoading(true);
+
+    try {
+      const response = await sendChatMessage(textToSend);
+      
+      const llmMessage: ChatMessage = {
+        sender: Sender.LLM,
+        text: response.response,
+        products: response.products,
+        searchResults: response.search_results,
+        tagResult: response.tag_result,
+      };
+      setMessages([...messagesWithUser, llmMessage]);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      const errorMessage: ChatMessage = {
+        sender: Sender.LLM,
+        text: 'Üzgünüm, bir hata oluştu. Lütfen tekrar deneyin.',
+      };
+      setMessages([...messagesWithUser, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (initialMessage && messages.length === 0) {
+      sendMessage(initialMessage);
+    }
+  }, [initialMessage, messages.length, sendMessage]);
 
   const handleShowSimilar = async (productName: string, productDescription?: string) => {
     setIsLoading(true);
@@ -183,8 +280,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ initialMessage }) => {
       // Add a new message with similar products
       const similarMessage: ChatMessage = {
         sender: Sender.LLM,
-        text: `"${productName}" ürününe benzer ${similarProducts.length} ürün bulundu:`,
+                content: (
+          <>
+            <span style={{ color: '#FFA500' }}>Alışveriş Sitesi</span>'nden istediğin ürünleri getirdim. <strong>{productName}</strong> ürününe benzer {similarProducts.length} ürün bulundu:
+          </>
+        ),
         products: similarProducts,
+        fromDatabase: true,
       };
       
       setMessages(prev => [...prev, similarMessage]);
@@ -200,27 +302,67 @@ const ChatPage: React.FC<ChatPageProps> = ({ initialMessage }) => {
     }
   };
 
+  const handleRetrySearch = (messageIndex: number) => {
+    setHiddenRetryButtons(prev => {
+      const newSet = new Set(prev);
+      newSet.add(messageIndex);
+      return newSet;
+    });
+    setShowSearchBar(true);
+    setSearchQuery('');
+  };
+
+  const handleSearchSubmit = () => {
+    if (searchQuery.trim()) {
+      sendMessage(searchQuery.trim());
+      setShowSearchBar(false);
+      setSearchQuery('');
+    }
+  };
+
+  const handleSearchKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSearchSubmit();
+    }
+  };
+
+  const handleCloseSearch = () => {
+    setShowSearchBar(false);
+    setSearchQuery('');
+  };
+
+
+
 
   const renderMessage = (message: ChatMessage, index: number) => (
-    <div key={index}>
+    <MessageWrapper key={index} sender={message.sender}>
       <MessageBubble sender={message.sender}>
-        {message.text && (
-          <ReactMarkdown>{message.text}</ReactMarkdown>
+        {message.content ? (
+          <div>{message.content}</div>
+        ) : (
+          message.text && <ReactMarkdown>{message.text}</ReactMarkdown>
         )}
       </MessageBubble>
 
       {message.products && message.products.length > 0 && (
-        <ProductsBubble>
-          <ProductsContainer>
-            {message.products.map((product, idx) => (
-              <ProductCard 
-                key={idx} 
-                product={product} 
-                onShowSimilar={handleShowSimilar}
-              />
-            ))}
-          </ProductsContainer>
-        </ProductsBubble>
+        <>
+          <ProductsBubble>
+            <ProductsContainer>
+              {message.products.map((product, idx) => (
+                <ProductCard 
+                  key={idx} 
+                  product={product}
+                  onShowSimilar={message.fromDatabase ? undefined : handleShowSimilar}
+                />
+              ))}
+            </ProductsContainer>
+          </ProductsBubble>
+          {message.sender === Sender.LLM && !hiddenRetryButtons.has(index) && (
+            <RetryButton onClick={() => handleRetrySearch(index)}>
+              Hiçbiri değil, tekrar tarif edeyim
+            </RetryButton>
+          )}
+        </>
       )}
 
       {message.searchResults && message.searchResults.length > 0 && (
@@ -245,12 +387,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ initialMessage }) => {
           <p><strong>Görsel Tanım:</strong> {message.tagResult.visualDescription}</p>
         </TagResultContainer>
       )}
-    </div>
+    </MessageWrapper>
   );
 
   return (
     <Container>
-      <MessagesContainer>
+      <MessagesContainer ref={messagesContainerRef} onScroll={handleScroll}>
         {messages.map(renderMessage)}
         {isLoading && (
           <LoadingIndicator>
@@ -260,6 +402,28 @@ const ChatPage: React.FC<ChatPageProps> = ({ initialMessage }) => {
         )}
         <div ref={messagesEndRef} />
       </MessagesContainer>
+
+      {showSearchBar && (
+        <SearchBarContainer>
+          <SearchInput
+            type="text"
+            placeholder="Ürününüzü yeniden tarif edin..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyPress={handleSearchKeyPress}
+            autoFocus
+          />
+          <SearchButton 
+            onClick={handleSearchSubmit}
+            disabled={!searchQuery.trim()}
+          >
+            Ara
+          </SearchButton>
+          <CloseSearchButton onClick={handleCloseSearch}>
+            ✕
+          </CloseSearchButton>
+        </SearchBarContainer>
+      )}
     </Container>
   );
 };

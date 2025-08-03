@@ -217,15 +217,15 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onShowSimilar }) => 
       ) : (
         // Database products - show rating and review count
         <MetadataContainer>
-          {product.rating && (
-            <RatingContainer>
-              <Stars>{renderStars(product.rating)}</Stars>
-              <RatingText>({product.rating.toFixed(1)})</RatingText>
-            </RatingContainer>
-          )}
-          
-          {product.reviewCount && (
-            <RatingText>{product.reviewCount} yorum</RatingText>
+          <RatingContainer>
+            <Stars>{renderStars(product.rating ?? 0)}</Stars>
+            <RatingText>
+              {(product.rating ?? 0).toFixed(1)}
+              {product.reviewCount && ` (${product.reviewCount} yorum)`}
+            </RatingText>
+          </RatingContainer>
+          {product.subcategory && (
+            <Subcategory>{product.subcategory}</Subcategory>
           )}
         </MetadataContainer>
       )}

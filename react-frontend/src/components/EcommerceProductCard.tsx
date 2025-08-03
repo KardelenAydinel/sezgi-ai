@@ -167,9 +167,10 @@ interface EcommerceProductCardProps {
 }
 
 const EcommerceProductCard: React.FC<EcommerceProductCardProps> = ({ product }) => {
-  const renderStars = (rating: number) => {
-    const fullStars = Math.floor(rating);
-    const hasHalfStar = rating % 1 !== 0;
+  const renderStars = (rating: number | undefined) => {
+    const effectiveRating = rating ?? 0;
+    const fullStars = Math.floor(effectiveRating);
+    const hasHalfStar = effectiveRating % 1 !== 0;
     const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
 
     return (
@@ -250,22 +251,15 @@ const EcommerceProductCard: React.FC<EcommerceProductCardProps> = ({ product }) 
       )}
 
       <MetadataContainer>
-        {product.rating !== undefined && (
-          <RatingContainer>
-            <Stars>{renderStars(product.rating)}</Stars>
-            <RatingText>
-              {product.rating.toFixed(1)}
-              {product.reviewCount && ` (${product.reviewCount})`}
-            </RatingText>
-          </RatingContainer>
-        )}
+        <RatingContainer>
+          <Stars>{renderStars(product.rating ?? 0)}</Stars>
+          <RatingText>
+            {(product.rating ?? 0).toFixed(1)}
+            {product.reviewCount && ` (${product.reviewCount} yorum)`}
+          </RatingText>
+        </RatingContainer>
 
-        {product.similarityScore !== undefined && (
-          <SimilarityScore>
-            <span>🎯</span>
-            <span>Eşleşme: %{(product.similarityScore * 100).toFixed(1)}</span>
-          </SimilarityScore>
-        )}
+
       </MetadataContainer>
     </Card>
   );

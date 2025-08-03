@@ -56,83 +56,7 @@ const ChatWrapper = styled.div<{ isShowing: boolean }>`
   `}
 `;
 
-// Bottom search bar with slide-up animation
-const BottomSearchWrapper = styled.div<{ isShowing: boolean }>`
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background-color: ${({ theme }) => theme.colors.surface};
-  border-top: 1px solid ${({ theme }) => theme.colors.grey[300]};
-  padding: ${({ theme }) => theme.spacing.md};
-  transform: translateY(100%);
-  transition: transform 0.3s ease-out;
-  z-index: 1000;
-  
-  ${({ isShowing }) => isShowing && `
-    transform: translateY(0);
-  `}
-`;
 
-const BottomSearchContainer = styled.div`
-  display: flex;
-  gap: ${({ theme }) => theme.spacing.sm};
-  max-width: 600px;
-  margin: 0 auto;
-`;
-
-const BottomSearchInput = styled.input`
-  flex: 1;
-  padding: ${({ theme }) => theme.spacing.md};
-  border: 1px solid ${({ theme }) => theme.colors.grey[300]};
-  border-radius: ${({ theme }) => theme.borderRadius.lg};
-  font-size: ${({ theme }) => theme.typography.fontSize.md};
-  
-  &:focus {
-    outline: none;
-    border-color: ${({ theme }) => theme.colors.primary};
-    box-shadow: 0 0 0 2px ${({ theme }) => theme.colors.primary}20;
-  }
-`;
-
-const BottomSearchButton = styled.button`
-  padding: ${({ theme }) => theme.spacing.md} ${({ theme }) => theme.spacing.lg};
-  background-color: ${({ theme }) => theme.colors.primary};
-  color: ${({ theme }) => theme.colors.onPrimary};
-  border: none;
-  border-radius: ${({ theme }) => theme.borderRadius.lg};
-  font-weight: ${({ theme }) => theme.typography.fontWeight.medium};
-  cursor: pointer;
-  transition: all 0.2s ease;
-  
-  &:hover {
-    background-color: ${({ theme }) => theme.colors.primaryVariant};
-  }
-  
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`;
-
-const RetryButton = styled.button`
-  width: 100%;
-  max-width: 400px;
-  margin: ${({ theme }) => theme.spacing.lg} auto 0;
-  padding: ${({ theme }) => theme.spacing.md};
-  background-color: transparent;
-  color: ${({ theme }) => theme.colors.primary};
-  border: 2px solid ${({ theme }) => theme.colors.primary};
-  border-radius: ${({ theme }) => theme.borderRadius.lg};
-  font-weight: ${({ theme }) => theme.typography.fontWeight.medium};
-  cursor: pointer;
-  transition: all 0.2s ease;
-  
-  &:hover {
-    background-color: ${({ theme }) => theme.colors.primary};
-    color: ${({ theme }) => theme.colors.onPrimary};
-  }
-`;
 
 const Header = styled.header`
   display: flex;
@@ -332,10 +256,8 @@ const ExampleText = styled.p`
 const WelcomeScreen: React.FC = () => {
   const navigate = useNavigate();
   const [searchText, setSearchText] = useState('');
-  const [bottomSearchText, setBottomSearchText] = useState('');
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [showChat, setShowChat] = useState(false);
-  const [showBottomSearch, setShowBottomSearch] = useState(false);
   const [initialMessage, setInitialMessage] = useState('');
 
   const handleSearch = () => {
@@ -360,23 +282,6 @@ const WelcomeScreen: React.FC = () => {
     }, 500);
   };
 
-  const handleRetrySearch = () => {
-    setShowBottomSearch(true);
-  };
-
-  const handleBottomSearch = () => {
-    if (bottomSearchText.trim()) {
-      setInitialMessage(''); // Reset to allow re-triggering useEffect
-      
-      setTimeout(() => {
-        setInitialMessage(bottomSearchText);
-      }, 50); // Give React time to process state change
-      
-      setBottomSearchText('');
-      setShowBottomSearch(false);
-    }
-  };
-
   const handleBusinessLogin = () => {
     navigate('/business');
   };
@@ -384,12 +289,6 @@ const WelcomeScreen: React.FC = () => {
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleSearch();
-    }
-  };
-
-  const handleBottomKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleBottomSearch();
     }
   };
 
@@ -466,29 +365,7 @@ const WelcomeScreen: React.FC = () => {
       {/* Chat Page */}
       <ChatWrapper isShowing={showChat}>
         <ChatPage initialMessage={initialMessage} />
-        <RetryButton onClick={handleRetrySearch}>
-          Hiçbiri değil, tekrar tarif edeyim
-        </RetryButton>
       </ChatWrapper>
-
-      {/* Bottom Search Bar */}
-      <BottomSearchWrapper isShowing={showBottomSearch}>
-        <BottomSearchContainer>
-          <BottomSearchInput
-            type="text"
-            placeholder="Yeni arama yapmak için yazın..."
-            value={bottomSearchText}
-            onChange={(e) => setBottomSearchText(e.target.value)}
-            onKeyPress={handleBottomKeyPress}
-          />
-          <BottomSearchButton 
-            onClick={handleBottomSearch}
-            disabled={!bottomSearchText.trim()}
-          >
-            Ara
-          </BottomSearchButton>
-        </BottomSearchContainer>
-      </BottomSearchWrapper>
     </Container>
   );
 };

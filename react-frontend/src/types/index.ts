@@ -1,4 +1,5 @@
 // Data Models converted from Flutter Dart classes to TypeScript interfaces
+import type { ReactNode } from 'react';
 
 export enum Sender {
   USER = 'user',
@@ -8,10 +9,12 @@ export enum Sender {
 export interface ChatMessage {
   sender: Sender;
   text?: string;
+  content?: ReactNode;
   products?: Product[];
   numberOfCards?: number;
   searchResults?: EcommerceProduct[];
   tagResult?: TagGenerationResult;
+  fromDatabase?: boolean;
 }
 
 export interface TagGenerationResult {
