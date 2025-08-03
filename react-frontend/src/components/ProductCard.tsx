@@ -11,7 +11,7 @@ const Card = styled.div`
   transition: all 0.2s ease;
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: 335px; // Fixed height for consistent AI generated image cards
   flex: 1; // Allow cards to grow and shrink equally
   min-width: 150px; // Smaller minimum width to fit more cards
   max-width: 250px; // Maximum width to prevent too wide cards
@@ -41,6 +41,7 @@ const ProductImage = styled.img`
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center; // Center the image vertically and horizontally
 `;
 
 
@@ -52,6 +53,12 @@ const ProductName = styled.h3`
   margin-bottom: ${({ theme }) => theme.spacing.xs};
   line-height: 1.3;
   text-align: center; // Center align like in the photo
+  height: 42px; // Fixed height for consistent layout
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
 `;
 
 const ProductDescription = styled.p`
