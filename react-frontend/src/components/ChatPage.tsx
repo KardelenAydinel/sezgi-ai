@@ -52,6 +52,8 @@ const ProductsBubble = styled.div`
   border-radius: ${({ theme }) => theme.borderRadius.lg};
   box-shadow: ${({ theme }) => theme.shadows.sm};
   margin-top: ${({ theme }) => theme.spacing.sm};
+  margin-bottom: 60px; // RetryButton için yeterli alan bırak (button height + spacing)
+  position: relative; // RetryButton'ın absolute positioning için gerekli
 `;
 
 const ProductsContainer = styled.div`
@@ -117,22 +119,26 @@ const LoadingIndicator = styled.div`
 `;
 
 const RetryButton = styled.button`
-  width: 100%;
-  max-width: 400px;
-  margin: ${({ theme }) => theme.spacing.md} 0;
-  padding: ${({ theme }) => theme.spacing.md};
-  background-color: transparent;
-  color: ${({ theme }) => theme.colors.primary};
-  border: 2px solid ${({ theme }) => theme.colors.primary};
+  width: auto;
+  max-width: 200px; // %50 küçültüldü (400px -> 200px)
+  padding: ${({ theme }) => theme.spacing.sm}; // Padding azaltıldı
+  background-color: rgba(255, 255, 255, 0.9); // Hafif saydam beyaz arkaplan
+  color: ${({ theme }) => theme.colors.grey[600]}; // Gri renk
+  border: 2px solid ${({ theme }) => theme.colors.grey[400]}; // Gri border
   border-radius: ${({ theme }) => theme.borderRadius.lg};
   font-weight: ${({ theme }) => theme.typography.fontWeight.medium};
   cursor: pointer;
   transition: all 0.2s ease;
-  align-self: flex-start;
+  position: absolute; // Absolute positioning
+  left: 50%; // Baloncuğun genişliğinin yarısı (dinamik)
+  top: 100%; // Baloncuğun altında konumlandır
+  transform: translate(-50%, 0.5rem); // Yatayda ortala, dikeyde biraz aşağı kaydır
+  z-index: 10; // Üstte görünmesi için
   
   &:hover {
-    background-color: ${({ theme }) => theme.colors.primary};
-    color: ${({ theme }) => theme.colors.onPrimary};
+    background-color: ${({ theme }) => theme.colors.grey[100]};
+    color: ${({ theme }) => theme.colors.grey[700]};
+    border-color: ${({ theme }) => theme.colors.grey[500]};
   }
 `;
 
@@ -345,24 +351,22 @@ const ChatPage: React.FC<ChatPageProps> = ({ initialMessage }) => {
       </MessageBubble>
 
       {message.products && message.products.length > 0 && (
-        <>
-          <ProductsBubble>
-            <ProductsContainer>
-              {message.products.map((product, idx) => (
-                <ProductCard 
-                  key={idx} 
-                  product={product}
-                  onShowSimilar={message.fromDatabase ? undefined : handleShowSimilar}
-                />
-              ))}
-            </ProductsContainer>
-          </ProductsBubble>
-          {message.sender === Sender.LLM && !hiddenRetryButtons.has(index) && (
+        <ProductsBubble>
+          <ProductsContainer>
+            {message.products.map((product, idx) => (
+              <ProductCard 
+                key={idx} 
+                product={product}
+                onShowSimilar={message.fromDatabase ? undefined : handleShowSimilar}
+              />
+            ))}
+          </ProductsContainer>
+          {message.sender === Sender.LLM && !message.fromDatabase && !hiddenRetryButtons.has(index) && (
             <RetryButton onClick={() => handleRetrySearch(index)}>
               Hiçbiri değil, tekrar tarif edeyim
             </RetryButton>
           )}
-        </>
+        </ProductsBubble>
       )}
 
       {message.searchResults && message.searchResults.length > 0 && (
