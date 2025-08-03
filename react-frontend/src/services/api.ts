@@ -34,7 +34,10 @@ export const sendChatMessage = async (message: string): Promise<ChatResponse> =>
     });
     
     return {
-      response: `"${message}" için ${response.data.number_of_cards || 0} ürün önerisi oluşturuldu:`,
+      // response: `"${message}" için ${response.data.number_of_cards || 0} ürün önerisi oluşturuldu:`,
+      // response: `Hmm... Sanırım aklındaki 'o şey'i buldum. Bunlardan biri miydi?`,
+      response: `Hmm... tarifin zihnimde bir şeyler canlandırdı. Aradığın 'o şey'in bu olabilir mi?`,
+
       products: (response.data.products || []).map(createProductFromJson),
       search_results: [],
       tag_result: undefined
@@ -109,11 +112,15 @@ export const getABTestResults = async (productId: string): Promise<any> => {
 };
 
 // Similar products search for "Bunun Gibileri Göster" functionality
-export const findSimilarProducts = async (productName: string): Promise<Product[]> => {
+export const findSimilarProducts = async (productName: string, productDescription?: string): Promise<Product[]> => {
   try {
-    const response = await api.post('/search_products', {
-      query: productName,
-      limit: 10
+    // Use the correct endpoint that triggers agentic AI tag generation
+    const response = await api.post('/similar_products', {
+      product: {
+        urun_adi: productName,
+        urun_aciklama: productDescription || `Benzer ürünler: ${productName}`,
+        urun_adi_en: productName, // Use same name for English
+      }
     });
     return response.data.products?.map(createProductFromJson) || [];
   } catch (error) {

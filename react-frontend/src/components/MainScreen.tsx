@@ -134,32 +134,6 @@ const MainScreen: React.FC = () => {
 
   return (
     <Container>
-      <AppBar>
-        <Title>
-          {isBusinessMode ? 'Satıcı Paneli' : 'Görsel Alışveriş Asistanı'}
-        </Title>
-        
-        <div className="menu-container" style={{ position: 'relative' }}>
-          <MenuButton onClick={toggleMenu}>
-            <span className="icon">
-              {isBusinessMode ? '🏢' : '🛒'}
-            </span>
-            <span>⋮</span>
-          </MenuButton>
-          
-          <DropdownMenu isOpen={isMenuOpen}>
-            <DropdownItem onClick={toggleMode}>
-              <span className="icon">
-                {isBusinessMode ? '🛒' : '🏢'}
-              </span>
-              <span>
-                {isBusinessMode ? 'Alıcı Modu' : 'Satıcı Paneli'}
-              </span>
-            </DropdownItem>
-          </DropdownMenu>
-        </div>
-      </AppBar>
-
       <Content>
         <ChatPage initialMessage={initialMessage} />
       </Content>

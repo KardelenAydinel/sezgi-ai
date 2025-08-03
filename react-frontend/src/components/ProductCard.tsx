@@ -6,12 +6,15 @@ const Card = styled.div`
   background-color: ${({ theme }) => theme.colors.surface};
   border: 1px solid ${({ theme }) => theme.colors.grey[200]};
   border-radius: ${({ theme }) => theme.borderRadius.lg};
-  padding: ${({ theme }) => theme.spacing.md};
+  padding: ${({ theme }) => theme.spacing.sm}; // Reduced padding for more compact cards
   box-shadow: ${({ theme }) => theme.shadows.sm};
   transition: all 0.2s ease;
   display: flex;
   flex-direction: column;
   height: 100%;
+  flex: 1; // Allow cards to grow and shrink equally
+  min-width: 150px; // Smaller minimum width to fit more cards
+  max-width: 250px; // Maximum width to prevent too wide cards
 
   &:hover {
     transform: translateY(-2px);
@@ -22,17 +25,19 @@ const Card = styled.div`
 
 const ImageContainer = styled.div`
   width: 100%;
-  height: 200px;
+  height: 0;
+  padding-bottom: 100%; // 1:1 aspect ratio (square)
+  position: relative;
   border-radius: ${({ theme }) => theme.borderRadius.md};
   overflow: hidden;
-  margin-bottom: ${({ theme }) => theme.spacing.md};
+  margin: ${({ theme }) => theme.spacing.sm} 0;
   background-color: ${({ theme }) => theme.colors.grey[100]};
-  display: flex;
-  align-items: center;
-  justify-content: center;
 `;
 
 const ProductImage = styled.img`
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -41,19 +46,25 @@ const ProductImage = styled.img`
 
 
 const ProductName = styled.h3`
-  font-size: ${({ theme }) => theme.typography.fontSize.lg};
+  font-size: ${({ theme }) => theme.typography.fontSize.md};
   font-weight: ${({ theme }) => theme.typography.fontWeight.semiBold};
   color: ${({ theme }) => theme.colors.text.primary};
-  margin-bottom: ${({ theme }) => theme.spacing.sm};
+  margin-bottom: ${({ theme }) => theme.spacing.xs};
   line-height: 1.3;
+  text-align: center; // Center align like in the photo
 `;
 
 const ProductDescription = styled.p`
-  font-size: ${({ theme }) => theme.typography.fontSize.sm};
+  font-size: ${({ theme }) => theme.typography.fontSize.xs};
   color: ${({ theme }) => theme.colors.text.secondary};
-  line-height: 1.4;
-  margin-bottom: ${({ theme }) => theme.spacing.md};
+  line-height: 1.3;
+  margin-bottom: ${({ theme }) => theme.spacing.sm};
   flex: 1;
+  display: -webkit-box;
+  -webkit-line-clamp: 3; // Limit to 3 lines
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-align: center; // Center align like in the photo
 `;
 
 const MetadataContainer = styled.div`
@@ -111,19 +122,19 @@ const Subcategory = styled.span`
 
 const ActionButton = styled.button`
   width: 100%;
-  padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.md};
-  background-color: ${({ theme }) => theme.colors.primary};
-  color: ${({ theme }) => theme.colors.onPrimary};
+  padding: ${({ theme }) => theme.spacing.xs} ${({ theme }) => theme.spacing.sm};
+  background-color: #FF8C00; // Orange color like in the photo
+  color: white;
   border: none;
   border-radius: ${({ theme }) => theme.borderRadius.md};
-  font-size: ${({ theme }) => theme.typography.fontSize.sm};
+  font-size: ${({ theme }) => theme.typography.fontSize.xs};
   font-weight: ${({ theme }) => theme.typography.fontWeight.medium};
   cursor: pointer;
   transition: all 0.2s ease;
-  margin-top: ${({ theme }) => theme.spacing.md};
+  margin-top: ${({ theme }) => theme.spacing.xs};
 
   &:hover {
-    background-color: ${({ theme }) => theme.colors.primaryVariant};
+    background-color: #FF7F00;
     transform: translateY(-1px);
   }
 
@@ -132,9 +143,11 @@ const ActionButton = styled.button`
   }
 `;
 
+
+
 interface ProductCardProps {
   product: Product;
-  onShowSimilar?: (productName: string) => void;
+  onShowSimilar?: (productName: string, productDescription?: string) => void;
 }
 
 const ProductCard: React.FC<ProductCardProps> = ({ product, onShowSimilar }) => {
@@ -161,6 +174,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onShowSimilar }) => 
 
   return (
     <Card>
+      <ProductName>{product.name}</ProductName>
+      
       <ImageContainer>
         <ProductImage 
           src={getImageSrc()}
@@ -173,6 +188,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onShowSimilar }) => 
               const placeholder = document.createElement('div');
               placeholder.className = 'placeholder';
               placeholder.style.cssText = `
+                position: absolute;
+                top: 0;
+                left: 0;
                 width: 100%;
                 height: 100%;
                 display: flex;
@@ -188,46 +206,28 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onShowSimilar }) => 
           }}
         />
       </ImageContainer>
-
-      <ProductName>{product.name}</ProductName>
-      
-      {product.subcategory && (
-        <div style={{ marginBottom: '8px' }}>
-          <Subcategory>{product.subcategory}</Subcategory>
-        </div>
-      )}
       
       <ProductDescription>{product.description}</ProductDescription>
 
-      <MetadataContainer>
-        {product.rating !== undefined && (
-          <RatingContainer>
-            <Stars>{renderStars(product.rating)}</Stars>
-            <RatingText>
-              {product.rating.toFixed(1)}
-              {product.reviewCount && ` (${product.reviewCount} değerlendirme)`}
-            </RatingText>
-          </RatingContainer>
-        )}
-
-        {product.similarityScore !== undefined && (
-          <SimilarityScore>
-            <span>🎯</span>
-            <span>Eşleşme: %{(product.similarityScore * 100).toFixed(1)}</span>
-          </SimilarityScore>
-        )}
-
-        {product.visualRepresentation && (
-          <VisualDescription>
-            <strong>Görsel Tanım:</strong> {product.visualRepresentation}
-          </VisualDescription>
-        )}
-      </MetadataContainer>
-
-      {onShowSimilar && (
-        <ActionButton onClick={() => onShowSimilar(product.name)}>
-          🔍 Bunun Gibileri Göster
+      {onShowSimilar ? (
+        // AI Generated products - show "Benzer Ürünleri Göster" button
+        <ActionButton onClick={() => onShowSimilar(product.name, product.description)}>
+          Benzer Ürünleri Göster
         </ActionButton>
+      ) : (
+        // Database products - show rating and review count
+        <MetadataContainer>
+          {product.rating && (
+            <RatingContainer>
+              <Stars>{renderStars(product.rating)}</Stars>
+              <RatingText>({product.rating.toFixed(1)})</RatingText>
+            </RatingContainer>
+          )}
+          
+          {product.reviewCount && (
+            <RatingText>{product.reviewCount} yorum</RatingText>
+          )}
+        </MetadataContainer>
       )}
     </Card>
   );

@@ -9,38 +9,53 @@ import EcommerceProductCard from './EcommerceProductCard';
 const Container = styled.div`
   display: flex;
   flex-direction: column;
-  height: 100%;
-  max-height: calc(100vh - 80px); // Subtract header height
+  height: 100vh; // Use full viewport height since header is removed
 `;
 
 const MessagesContainer = styled.div`
   flex: 1;
   overflow-y: auto;
-  padding: ${({ theme }) => theme.spacing.md};
+  padding: ${({ theme }) => theme.spacing.sm}; // Reduced padding for more content
   display: flex;
   flex-direction: column;
-  gap: ${({ theme }) => theme.spacing.md};
+  gap: ${({ theme }) => theme.spacing.sm};
 `;
 
 const MessageBubble = styled.div<{ sender: Sender }>`
   max-width: 70%;
-  align-self: ${({ sender }) => sender === Sender.USER ? 'flex-end' : 'flex-start'};
+  width: fit-content; // Adjust width to content size
+  min-width: 60px; // Minimum width for very short messages
+  align-self: ${({ sender }) => sender === Sender.USER ? 'flex-end !important' : 'flex-start !important'};
+  margin-left: ${({ sender }) => sender === Sender.USER ? 'auto' : '0'};
+  margin-right: ${({ sender }) => sender === Sender.USER ? '0' : 'auto'};
   background-color: ${({ sender, theme }) => 
-    sender === Sender.USER ? theme.colors.primary : theme.colors.surface};
+    sender === Sender.USER ? theme.colors.primary : theme.colors.grey[200]};
   color: ${({ sender, theme }) => 
-    sender === Sender.USER ? theme.colors.onPrimary : theme.colors.onSurface};
+    sender === Sender.USER ? theme.colors.onPrimary : theme.colors.text.primary};
   padding: ${({ theme }) => theme.spacing.md};
   border-radius: ${({ theme }) => theme.borderRadius.lg};
   box-shadow: ${({ theme }) => theme.shadows.sm};
   word-wrap: break-word;
 `;
 
-const ProductsGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: ${({ theme }) => theme.spacing.md};
-  margin-top: ${({ theme }) => theme.spacing.md};
-  width: 100%;
+const ProductsBubble = styled.div`
+  max-width: 70%;
+  width: fit-content; // Adjust width to content size (number of products)
+  align-self: flex-start;
+  background-color: ${({ theme }) => theme.colors.grey[200]};
+  color: ${({ theme }) => theme.colors.text.primary};
+  padding: ${({ theme }) => theme.spacing.md};
+  border-radius: ${({ theme }) => theme.borderRadius.lg};
+  box-shadow: ${({ theme }) => theme.shadows.sm};
+  margin-top: ${({ theme }) => theme.spacing.sm};
+`;
+
+const ProductsContainer = styled.div`
+  display: flex;
+  gap: ${({ theme }) => theme.spacing.sm};
+  padding: ${({ theme }) => theme.spacing.xs} 0;
+  flex-wrap: nowrap;
+  justify-content: space-between;
 `;
 
 const EcommerceGrid = styled.div`
@@ -49,6 +64,8 @@ const EcommerceGrid = styled.div`
   gap: ${({ theme }) => theme.spacing.md};
   margin-top: ${({ theme }) => theme.spacing.md};
   width: 100%;
+  max-width: 900px; // Consistent with ProductsGrid
+  align-self: flex-start; // Align with assistant messages on the left
 `;
 
 const TagResultContainer = styled.div`
@@ -57,6 +74,8 @@ const TagResultContainer = styled.div`
   border-radius: ${({ theme }) => theme.borderRadius.lg};
   padding: ${({ theme }) => theme.spacing.md};
   margin-top: ${({ theme }) => theme.spacing.md};
+  max-width: 900px; // Consistent with other grids
+  align-self: flex-start; // Align with assistant messages on the left
 `;
 
 const TagResultTitle = styled.h3`
@@ -79,82 +98,9 @@ const Tag = styled.span`
   font-size: ${({ theme }) => theme.typography.fontSize.sm};
 `;
 
-const InputContainer = styled.div`
-  padding: ${({ theme }) => theme.spacing.md};
-  border-top: 1px solid ${({ theme }) => theme.colors.grey[300]};
-  background-color: ${({ theme }) => theme.colors.surface};
-`;
 
-const InputRow = styled.div`
-  display: flex;
-  gap: ${({ theme }) => theme.spacing.sm};
-  align-items: flex-end;
-`;
 
-const TextInput = styled.textarea`
-  flex: 1;
-  padding: ${({ theme }) => theme.spacing.md};
-  border: 1px solid ${({ theme }) => theme.colors.grey[300]};
-  border-radius: ${({ theme }) => theme.borderRadius.lg};
-  resize: none;
-  min-height: 44px;
-  max-height: 120px;
-  font-family: inherit;
-  font-size: inherit;
-  
-  &:focus {
-    border-color: ${({ theme }) => theme.colors.primary};
-    outline: none;
-    box-shadow: 0 0 0 3px ${({ theme }) => theme.colors.primary}20;
-  }
-`;
 
-const SendButton = styled.button`
-  padding: ${({ theme }) => theme.spacing.md};
-  background-color: ${({ theme }) => theme.colors.primary};
-  color: ${({ theme }) => theme.colors.onPrimary};
-  border: none;
-  border-radius: ${({ theme }) => theme.borderRadius.lg};
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 44px;
-  height: 44px;
-  transition: all 0.2s ease;
-
-  &:hover:not(:disabled) {
-    background-color: ${({ theme }) => theme.colors.primaryVariant};
-  }
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-`;
-
-const FileInput = styled.input`
-  display: none;
-`;
-
-const ImageButton = styled.button`
-  padding: ${({ theme }) => theme.spacing.md};
-  background-color: ${({ theme }) => theme.colors.grey[200]};
-  color: ${({ theme }) => theme.colors.text.primary};
-  border: none;
-  border-radius: ${({ theme }) => theme.borderRadius.lg};
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 44px;
-  height: 44px;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background-color: ${({ theme }) => theme.colors.grey[300]};
-  }
-`;
 
 const LoadingIndicator = styled.div`
   display: flex;
@@ -172,10 +118,8 @@ interface ChatPageProps {
 
 const ChatPage: React.FC<ChatPageProps> = ({ initialMessage }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-scroll to bottom when new messages are added
   const scrollToBottom = () => {
@@ -186,157 +130,55 @@ const ChatPage: React.FC<ChatPageProps> = ({ initialMessage }) => {
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = useCallback(async (messageText?: string) => {
-    const textToSend = messageText || inputText.trim();
-    if (!textToSend || isLoading) return;
-
-    // Add user message
-    const userMessage: ChatMessage = {
-      sender: Sender.USER,
-      text: textToSend,
-    };
-    setMessages(prev => [...prev, userMessage]);
-    setInputText('');
-    setIsLoading(true);
-
-    try {
-      const response = await sendChatMessage(textToSend);
-      
-      // Add LLM response
-      const llmMessage: ChatMessage = {
-        sender: Sender.LLM,
-        text: response.response,
-        products: response.products,
-        searchResults: response.search_results,
-        tagResult: response.tag_result,
-      };
-      setMessages(prev => [...prev, llmMessage]);
-    } catch (error) {
-      console.error('Error sending message:', error);
-      const errorMessage: ChatMessage = {
-        sender: Sender.LLM,
-        text: 'Üzgünüm, bir hata oluştu. Lütfen tekrar deneyin.',
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [inputText, isLoading]);
-
-  // Send initial message if provided - use ref to prevent re-runs
-  const hasInitialMessageBeenSent = useRef(false);
-  
   useEffect(() => {
-    if (initialMessage && initialMessage.trim() && !hasInitialMessageBeenSent.current) {
-      hasInitialMessageBeenSent.current = true;
-      setInputText(initialMessage);
-      
-      // Delay to prevent race conditions
-      const timeoutId = setTimeout(() => {
-        const sendInitialMessage = async () => {
-          const textToSend = initialMessage.trim();
-          if (!textToSend) return;
+    if (initialMessage && initialMessage.trim()) {
+      const sendInitialMessage = async () => {
+        const textToSend = initialMessage.trim();
+        if (!textToSend) return;
 
-          // Add user message
-          const userMessage: ChatMessage = {
-            sender: Sender.USER,
-            text: textToSend,
-          };
-          setMessages([userMessage]); // Use direct set instead of prev => [...prev]
-          setIsLoading(true);
-
-          try {
-            const response = await sendChatMessage(textToSend);
-            
-            // Add LLM response
-            const llmMessage: ChatMessage = {
-              sender: Sender.LLM,
-              text: response.response,
-              products: response.products,
-              searchResults: response.search_results,
-              tagResult: response.tag_result,
-            };
-            setMessages(prev => [...prev, llmMessage]);
-          } catch (error) {
-            console.error('Error sending message:', error);
-            const errorMessage: ChatMessage = {
-              sender: Sender.LLM,
-              text: 'Üzgünüm, bir hata oluştu. Lütfen tekrar deneyin.',
-            };
-            setMessages(prev => [...prev, errorMessage]);
-          } finally {
-            setIsLoading(false);
-          }
-        };
-        
-        sendInitialMessage();
-      }, 100);
-
-      return () => clearTimeout(timeoutId);
-    }
-  }, [initialMessage]); // Only depend on initialMessage
-
-  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || isLoading) return;
-
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const base64 = reader.result as string;
-        const base64Data = base64.split(',')[1]; // Remove data:image/...;base64, prefix
-
-        // Add user message with image
+        // Add user message
         const userMessage: ChatMessage = {
           sender: Sender.USER,
-          text: '📷 Görsel yüklendi',
+          text: textToSend,
         };
-        setMessages(prev => [...prev, userMessage]);
+        // If there are previous messages, append, otherwise start new chat
+        setMessages(prev => (prev.length > 0 ? [...prev, userMessage] : [userMessage]));
         setIsLoading(true);
 
-        const response = await sendImageWithMessage(base64Data, inputText || 'Bu görseldeki ürünü analiz et');
-        
-        // Add LLM response
-        const llmMessage: ChatMessage = {
-          sender: Sender.LLM,
-          text: response.response,
-          products: response.products,
-          searchResults: response.search_results,
-          tagResult: response.tag_result,
-        };
-        setMessages(prev => [...prev, llmMessage]);
-        setInputText('');
-      } catch (error) {
-        console.error('Error uploading image:', error);
-        const errorMessage: ChatMessage = {
-          sender: Sender.LLM,
-          text: 'Görsel yüklenirken bir hata oluştu. Lütfen tekrar deneyin.',
-        };
-        setMessages(prev => [...prev, errorMessage]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    reader.readAsDataURL(file);
-    
-    // Reset file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+        try {
+          const response = await sendChatMessage(textToSend);
+          
+          // Add LLM response
+          const llmMessage: ChatMessage = {
+            sender: Sender.LLM,
+            text: response.response,
+            products: response.products,
+            searchResults: response.search_results,
+            tagResult: response.tag_result,
+          };
+          setMessages(prev => [...prev, llmMessage]);
+        } catch (error) {
+          console.error('Error sending message:', error);
+          const errorMessage: ChatMessage = {
+            sender: Sender.LLM,
+            text: 'Üzgünüm, bir hata oluştu. Lütfen tekrar deneyin.',
+          };
+          setMessages(prev => [...prev, errorMessage]);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      
+      sendInitialMessage();
     }
-  };
+  }, [initialMessage]); 
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
-
-  const handleShowSimilar = async (productName: string) => {
+  const handleShowSimilar = async (productName: string, productDescription?: string) => {
     setIsLoading(true);
     
     try {
-      const similarProducts = await findSimilarProducts(productName);
+      // Use agentic AI workflow: tag generation → cosine similarity search
+      const similarProducts = await findSimilarProducts(productName, productDescription);
       
       // Add a new message with similar products
       const similarMessage: ChatMessage = {
@@ -358,6 +200,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ initialMessage }) => {
     }
   };
 
+
   const renderMessage = (message: ChatMessage, index: number) => (
     <div key={index}>
       <MessageBubble sender={message.sender}>
@@ -367,15 +210,17 @@ const ChatPage: React.FC<ChatPageProps> = ({ initialMessage }) => {
       </MessageBubble>
 
       {message.products && message.products.length > 0 && (
-        <ProductsGrid>
-          {message.products.map((product, idx) => (
-            <ProductCard 
-              key={idx} 
-              product={product} 
-              onShowSimilar={handleShowSimilar}
-            />
-          ))}
-        </ProductsGrid>
+        <ProductsBubble>
+          <ProductsContainer>
+            {message.products.map((product, idx) => (
+              <ProductCard 
+                key={idx} 
+                product={product} 
+                onShowSimilar={handleShowSimilar}
+              />
+            ))}
+          </ProductsContainer>
+        </ProductsBubble>
       )}
 
       {message.searchResults && message.searchResults.length > 0 && (
@@ -415,33 +260,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ initialMessage }) => {
         )}
         <div ref={messagesEndRef} />
       </MessagesContainer>
-
-      <InputContainer>
-        <InputRow>
-          <ImageButton onClick={() => fileInputRef.current?.click()}>
-            📷
-          </ImageButton>
-          <FileInput
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleImageUpload}
-          />
-          <TextInput
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Mesajınızı yazın..."
-            disabled={isLoading}
-          />
-          <SendButton 
-            onClick={() => handleSendMessage()}
-            disabled={!inputText.trim() || isLoading}
-          >
-            📤
-          </SendButton>
-        </InputRow>
-      </InputContainer>
     </Container>
   );
 };
