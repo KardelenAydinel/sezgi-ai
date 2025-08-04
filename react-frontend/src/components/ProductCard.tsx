@@ -11,7 +11,6 @@ const Card = styled.div`
   transition: all 0.2s ease;
   display: flex;
   flex-direction: column;
-  height: 335px; // Fixed height for consistent AI generated image cards
   flex: 1; // Allow cards to grow and shrink equally
   min-width: 150px; // Smaller minimum width to fit more cards
   max-width: 250px; // Maximum width to prevent too wide cards
@@ -68,7 +67,7 @@ const ProductDescription = styled.p`
   margin-bottom: ${({ theme }) => theme.spacing.sm};
   flex: 1;
   display: -webkit-box;
-  -webkit-line-clamp: 3; // Limit to 3 lines
+  -webkit-line-clamp: 5; // Limit to 5 lines
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-align: center; // Center align like in the photo

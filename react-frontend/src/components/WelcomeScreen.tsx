@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled, { keyframes } from 'styled-components';
 import ChatPage from './ChatPage';
@@ -64,6 +64,15 @@ const Header = styled.header`
   align-items: center;
   padding: ${({ theme }) => theme.spacing.md};
   background-color: transparent;
+  
+`;
+
+const HeaderLine = styled.div`
+  width: 100%;
+  height: 3px;
+  background-color: ${({ theme }) => theme.colors.grey[200]};
+  margin-top: -10px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
 `;
 
 const UserIcon = styled.div`
@@ -75,6 +84,7 @@ const UserIcon = styled.div`
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  margin-top: -7px;
 `;
 
 const BusinessLoginButton = styled.button`
@@ -88,6 +98,7 @@ const BusinessLoginButton = styled.button`
   color: ${({ theme }) => theme.colors.grey[600]};
   font-size: 12px;
   cursor: pointer;
+  margin-top: -8px;
   transition: all 0.2s ease;
 
   &:hover {
@@ -105,17 +116,22 @@ const MainContent = styled.main`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: ${({ theme }) => theme.spacing.lg};
+  padding: ${({ theme }) => theme.spacing.md} ${({ theme }) => theme.spacing.lg} ${({ theme }) => theme.spacing.sm};
   text-align: center;
 `;
 
+// box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
 const LogoContainer = styled.div`
-  width: 120px;
-  height: 120px;
+  width: 110px;
+  height: 110px;
   border-radius: 60px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
   overflow: hidden;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  margin-top: -79px;
   margin-bottom: 40px;
+  background-color: ${({ theme }) => theme.colors.grey[50]};
+  position: relative;
+  z-index: 1;
 `;
 
 const LogoImage = styled.img`
@@ -136,7 +152,7 @@ const LogoFallback = styled.div`
 `;
 
 const Title = styled.h1`
-  font-size: 32px;
+  font-size: 40px;
   font-weight: ${({ theme }) => theme.typography.fontWeight.regular};
   margin-bottom: ${({ theme }) => theme.spacing.sm};
   line-height: 1.2;
@@ -149,6 +165,7 @@ const Title = styled.h1`
 const Subtitle = styled.p`
   font-size: 14px;
   color: ${({ theme }) => theme.colors.grey[600]};
+  margin-top: 5px;
   margin-bottom: 40px;
   max-width: 600px;
   line-height: 1.5;
@@ -178,6 +195,7 @@ const SearchInput = styled.input`
 
   &::placeholder {
     color: ${({ theme }) => theme.colors.grey[500]};
+    transition: opacity 0.1s ease;
   }
 `;
 
@@ -239,6 +257,7 @@ const ExampleCard = styled.button`
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: ${({ theme }) => theme.shadows.sm};
+  position: relative;
 
   &:hover {
     border-color: ${({ theme }) => theme.colors.primary};
@@ -253,12 +272,117 @@ const ExampleText = styled.p`
   line-height: 1.4;
 `;
 
+const TrendingIcon = styled.img`
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 20px;
+  height: 20px;
+`;
+
+// How It Works Section Styles
+const HowItWorksSection = styled.section`
+  width: 100%;
+  margin: 30px -${({ theme }) => theme.spacing.lg} 0;
+  padding: 40px ${({ theme }) => theme.spacing.lg};
+  background-color: #F8F9FA;
+`;
+
+const HowItWorksTitle = styled.h2`
+  font-size: 22px;
+  font-weight: ${({ theme }) => theme.typography.fontWeight.semiBold};
+  text-align: center;
+  margin-bottom: 20px;
+  color: ${({ theme }) => theme.colors.text.primary};
+`;
+
+const StepsContainer = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 15px;
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+    gap: 15px;
+  }
+`;
+
+const StepCard = styled.div`
+  flex: 1;
+  position: relative;
+  padding: 15px 12px;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  
+  &:not(:last-child)::after {
+    content: '→';
+    position: absolute;
+    right: -15px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 24px;
+    color: ${({ theme }) => theme.colors.primary};
+    font-weight: bold;
+    
+    @media (max-width: 768px) {
+      display: none;
+    }
+  }
+`;
+
+const StepHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 8px;
+`;
+
+const StepIconContainer = styled.div`
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, ${({ theme }) => theme.colors.primary}20, ${({ theme }) => theme.colors.primary}10);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+`;
+
+const StepTitle = styled.h3`
+  font-size: 16px;
+  font-weight: ${({ theme }) => theme.typography.fontWeight.semiBold};
+  color: ${({ theme }) => theme.colors.text.primary};
+  margin: 0;
+`;
+
+const StepDescription = styled.p`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.grey[600]};
+  line-height: 1.4;
+  margin: 0;
+  text-align: left;
+`;
+
 const WelcomeScreen: React.FC = () => {
   const navigate = useNavigate();
   const [searchText, setSearchText] = useState('');
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [initialMessage, setInitialMessage] = useState('');
+  const [currentPlaceholderIndex, setCurrentPlaceholderIndex] = useState(0);
+
+  const placeholderExamples = [
+    "Prize takılan gece lambası...",
+    "Fayans arasına sürülen şey...", 
+    "Yekpare çerçeveli günlük spor gözlük...",
+    "Duvara asılan örgü saksı tutucu...",
+    "Taş fırın lezzeti veren fırın tepsisi...",
+  ];
 
   const handleSearch = () => {
     if (searchText.trim()) {
@@ -292,10 +416,21 @@ const WelcomeScreen: React.FC = () => {
     }
   };
 
+  // Placeholder animation
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentPlaceholderIndex((prevIndex) => 
+        (prevIndex + 1) % placeholderExamples.length
+      );
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [placeholderExamples.length]);
+
   const examples = [
-    "Rahat bir spor ayakkabısı arıyorum",
-    "Vintage tarzda bir ceket önerir misin?",
-    "Minimalist ev dekorasyonu için ürünler"
+    "masanın bacağını sabitleyen L şeklindeki metal parça",
+    "kahve fincanının altına konan küçük tabak",
+    "saçımı tepede topuz yapan o sünger halka"
   ];
 
   return (
@@ -311,11 +446,13 @@ const WelcomeScreen: React.FC = () => {
             <span>Satıcı Girişi</span>
           </BusinessLoginButton>
         </Header>
+        
+        <HeaderLine />
 
         <MainContent>
           <LogoContainer>
             <LogoImage 
-              src="/sezgi_logo.jpeg" 
+              src="/sezgi_logo-preview.png" 
               alt="Sezgi Logo"
             />
             <LogoFallback style={{ display: 'none' }}>
@@ -334,7 +471,7 @@ const WelcomeScreen: React.FC = () => {
           <SearchContainer>
             <SearchInput
               type="text"
-              placeholder="Ne arıyorsunuz? (örn: rahat spor ayakkabısı)"
+              placeholder={placeholderExamples[currentPlaceholderIndex]}
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               onKeyPress={handleKeyPress}
@@ -354,11 +491,53 @@ const WelcomeScreen: React.FC = () => {
                   key={index} 
                   onClick={() => handleExampleClick(example)}
                 >
+                  <TrendingIcon src="/trending_up.svg" alt="Trending" />
                   <ExampleText>{example}</ExampleText>
                 </ExampleCard>
               ))}
             </ExampleGrid>
           </ExampleSection>
+
+          <HowItWorksSection>
+            <HowItWorksTitle>Nasıl Çalışır?</HowItWorksTitle>
+            <StepsContainer>
+              <StepCard>
+                <StepHeader>
+                  <StepIconContainer>
+                    💭
+                  </StepIconContainer>
+                  <StepTitle>Tarif Et</StepTitle>
+                </StepHeader>
+                <StepDescription>
+                  Aklındaki 'o şey'i, sanki bir arkadaşına anlatır gibi, birkaç kelimeyle yaz.
+                </StepDescription>
+              </StepCard>
+
+              <StepCard>
+                <StepHeader>
+                  <StepIconContainer>
+                    🎯
+                  </StepIconContainer>
+                  <StepTitle>Onayla</StepTitle>
+                </StepHeader>
+                <StepDescription>
+                  Sezgi'nin senin için bulduğu ve resmettiği kavramlardan doğru olanı tek bir tıkla seç.
+                </StepDescription>
+              </StepCard>
+
+              <StepCard>
+                <StepHeader>
+                  <StepIconContainer>
+                    ✨
+                  </StepIconContainer>
+                  <StepTitle>Keşfet</StepTitle>
+                </StepHeader>
+                <StepDescription>
+                  Artık adını bildiğin o ürünün en iyi alternatiflerini anında karşına getirelim.
+                </StepDescription>
+              </StepCard>
+            </StepsContainer>
+          </HowItWorksSection>
         </MainContent>
       </LandingWrapper>
 

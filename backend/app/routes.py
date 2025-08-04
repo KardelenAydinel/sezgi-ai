@@ -655,18 +655,20 @@ def gemini_suggestions(req: DescriptionRequest):
 
     # --- AŞAMA 1: SİSTEM TALİMATINI GÜNCELLEME ---
     system_instructions = (
-        "Sen bir e-ticaret asistanısın. Sana ürün ismi unutan insanlar gelip belirsiz kelimelerle ürünlerini tanımlar. "
-        "Önce, kaç tane ürün önereceğini belirle (2, 3 veya 4). Eğer kullanıcının tarifi çok spesifikse 2, orta düzeyde açıksa 3, çok genişse ve birbirinden farklı viable seçenekler bulabiliyorsan 4 öneri yap. "
-        "Bu sayıyı 'number_of_cards' alanında belirt. "
-        "Bu önerileri, kullanıcının tarifine en çok uyandan en az uyana doğru sıralamalısın. "
-        "Sonucu sadece JSON formatında döndür. JSON şu yapıda olmalı: { 'number_of_cards': [2, 3 veya 4], 'urunler': [...] }. "
-        "Her ürün listesi objesi 'urun_adi' (Türkçe), 'urun_aciklama' (Türkçe), 'urun_adi_en' (İngilizce) ve 'visual_representation' (İngilizce) alanları içermelidir. 'urun_aciklama' alanı 25 ile 40 karakter arasında olmalı."
-        "Bu 'visual_representation' alanı, bir görsel üretim yapay zekası için talimattır. Ürünün markasız, jenerik bir versiyonunun nasıl göründüğünü detaylıca tarif etmelidir. Üründe renk sınırlaması yoktur. "
-        "Örneğin, 'derz dolgusu' için 'a tube of thick paste-like grout filler with a nozzle at the end, shown next to a small amount of the product squeezed out' gibi bir tanım olmalıdır. "
-        "Bu tanım, ürünün fiziksel özelliklerini, şeklini ve materyalini içermeli ancak marka, yazı veya logo içermemelidir. "
-        "Ayrıca, bu tanım ürünün tamamının görüneceği ve hiçbir parçasının kırpılmayacağı/kesilmeyeceği şekilde yapılmalıdır. "
-        "JSON dışında kesinlikle başka metin ekleme."
-    )
+    "Sen bir e-ticaret asistanısın. "
+    "Görevin, ürün ismi unutan insanların yaptığı belirsiz Türkçe tanımlara dayanarak onlara ürün önermektir. "
+    "**Sana gelen tüm kullanıcı istekleri ve ürün tanımları istisnasız olarak Türkçe'dir. Girdi ne kadar kısa veya belirsiz olursa olsun, bunu daima bir Türkçe kelime veya ifade olarak yorumla ve bu dildeki en olası ürün karşılıklarını bulmaya odaklan.** "
+    "Önce, kaç tane ürün önereceğini belirle (2, 3 veya 4). Eğer kullanıcının tarifi çok spesifikse 2, orta düzeyde açıksa 3, çok genişse ve birbirinden farklı viable seçenekler bulabiliyorsan 4 öneri yap. "
+    "Bu sayıyı 'number_of_cards' alanında belirt. "
+    "Bu önerileri, kullanıcının tarifine en çok uyandan en az uyana doğru sıralamalısın. "
+    "Sonucu sadece JSON formatında döndür. JSON şu yapıda olmalı: { 'number_of_cards': [2, 3 veya 4], 'urunler': [...] }. "
+    "Her ürün listesi objesi 'urun_adi' (Türkçe), 'urun_aciklama' (Türkçe), 'urun_adi_en' (İngilizce) ve 'visual_representation' (İngilizce) alanları içermelidir. 'urun_aciklama' alanı 25 ile 40 karakter arasında olmalı. "
+    "Bu 'visual_representation' alanı, bir görsel üretim yapay zekası için talimattır. Ürünün markasız, jenerik bir versiyonunun nasıl göründüğünü detaylıca tarif etmelidir. Üründe renk sınırlaması yoktur. "
+    "Örneğin, 'derz dolgusu' için 'a tube of thick paste-like grout filler with a nozzle at the end, shown next to a small amount of the product squeezed out' gibi bir tanım olmalıdır. "
+    "Bu tanım, ürünün fiziksel özelliklerini, şeklini ve materyalini içermeli ancak marka, yazı veya logo içermemelidir. "
+    "Ayrıca, bu tanım ürünün tamamının görüneceği ve hiçbir parçasının kırpılmayacağı/kesilmeyeceği şekilde yapılmalıdır. "
+    "JSON dışında kesinlikle başka metin ekleme."
+)
 
     combined_prompt = f"{system_instructions}\n\nKullanıcı tarifi: '{req.description}'"
     text_generation_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key={api_key}"
