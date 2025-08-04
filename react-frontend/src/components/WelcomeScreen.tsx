@@ -71,7 +71,7 @@ const HeaderLine = styled.div`
   width: 100%;
   height: 3px;
   background-color: ${({ theme }) => theme.colors.grey[200]};
-  margin-top: -10px;
+  margin-top: 0px;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
 `;
 
@@ -84,7 +84,7 @@ const UserIcon = styled.div`
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  margin-top: -7px;
+  margin-top: 5px;
 `;
 
 const BusinessLoginButton = styled.button`
@@ -98,7 +98,7 @@ const BusinessLoginButton = styled.button`
   color: ${({ theme }) => theme.colors.grey[600]};
   font-size: 12px;
   cursor: pointer;
-  margin-top: -8px;
+  margin-top: 5px;
   transition: all 0.2s ease;
 
   &:hover {
@@ -283,9 +283,9 @@ const TrendingIcon = styled.img`
 // How It Works Section Styles
 const HowItWorksSection = styled.section`
   width: 100%;
-  margin: 30px -${({ theme }) => theme.spacing.lg} 0;
-  padding: 40px ${({ theme }) => theme.spacing.lg};
-  background-color: #F8F9FA;
+  margin: 20px -${({ theme }) => theme.spacing.lg} 0;
+  padding: 15px ${({ theme }) => theme.spacing.lg};
+  background-color: #F9F9F9;
 `;
 
 const HowItWorksTitle = styled.h2`
@@ -293,6 +293,7 @@ const HowItWorksTitle = styled.h2`
   font-weight: ${({ theme }) => theme.typography.fontWeight.semiBold};
   text-align: center;
   margin-bottom: 20px;
+  margin-top: 5px;
   color: ${({ theme }) => theme.colors.text.primary};
 `;
 
@@ -300,57 +301,67 @@ const StepsContainer = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 15px;
+  gap: 40px;
+  position: relative;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 35px;
+    left: calc(16.66% + 20px);
+    right: calc(16.66% + 20px);
+    height: 1px;
+    background: repeating-linear-gradient(
+      to right,
+      ${({ theme }) => theme.colors.grey[400]} 0,
+      ${({ theme }) => theme.colors.grey[400]} 8px,
+      transparent 8px,
+      transparent 16px
+    );
+    z-index: 0;
+    
+    @media (max-width: 768px) {
+      display: none;
+    }
+  }
   
   @media (max-width: 768px) {
     flex-direction: column;
-    gap: 15px;
+    gap: 30px;
   }
 `;
 
 const StepCard = styled.div`
   flex: 1;
   position: relative;
-  padding: 15px 12px;
+  padding: 10px 8px;
   transition: all 0.3s ease;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  
-  &:not(:last-child)::after {
-    content: '→';
-    position: absolute;
-    right: -15px;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 24px;
-    color: ${({ theme }) => theme.colors.primary};
-    font-weight: bold;
-    
-    @media (max-width: 768px) {
-      display: none;
-    }
-  }
-`;
-
-const StepHeader = styled.div`
-  display: flex;
   align-items: center;
+  text-align: center;
   gap: 12px;
-  padding-bottom: 8px;
+  z-index: 1;
 `;
 
 const StepIconContainer = styled.div`
-  width: 40px;
-  height: 40px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
-  background: linear-gradient(135deg, ${({ theme }) => theme.colors.primary}20, ${({ theme }) => theme.colors.primary}10);
+  /* Beyaz arka plan üzerine gradient ekle - dash'lerin arkasında kalmaması için */
+  background: 
+    linear-gradient(135deg, ${({ theme }) => theme.colors.primary}20, ${({ theme }) => theme.colors.primary}10),
+    white;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 24px;
   transition: all 0.3s ease;
   flex-shrink: 0;
+  border: 2px solid white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  position: relative;
+  z-index: 10; /* Dash çizgilerinin üstünde kalması için z-index artırıldı */
 `;
 
 const StepTitle = styled.h3`
@@ -358,6 +369,7 @@ const StepTitle = styled.h3`
   font-weight: ${({ theme }) => theme.typography.fontWeight.semiBold};
   color: ${({ theme }) => theme.colors.text.primary};
   margin: 0;
+  text-align: center;
 `;
 
 const StepDescription = styled.p`
@@ -365,7 +377,8 @@ const StepDescription = styled.p`
   color: ${({ theme }) => theme.colors.grey[600]};
   line-height: 1.4;
   margin: 0;
-  text-align: left;
+  text-align: center;
+  max-width: 200px;
 `;
 
 const WelcomeScreen: React.FC = () => {
@@ -499,39 +512,32 @@ const WelcomeScreen: React.FC = () => {
           </ExampleSection>
 
           <HowItWorksSection>
-            <HowItWorksTitle>Nasıl Çalışır?</HowItWorksTitle>
             <StepsContainer>
               <StepCard>
-                <StepHeader>
-                  <StepIconContainer>
-                    💭
-                  </StepIconContainer>
-                  <StepTitle>Tarif Et</StepTitle>
-                </StepHeader>
+                <StepIconContainer>
+                  💭
+                </StepIconContainer>
+                <StepTitle>Tarif Et</StepTitle>
                 <StepDescription>
                   Aklındaki 'o şey'i, sanki bir arkadaşına anlatır gibi, birkaç kelimeyle yaz.
                 </StepDescription>
               </StepCard>
 
               <StepCard>
-                <StepHeader>
-                  <StepIconContainer>
-                    🎯
-                  </StepIconContainer>
-                  <StepTitle>Onayla</StepTitle>
-                </StepHeader>
+                <StepIconContainer>
+                  🎯
+                </StepIconContainer>
+                <StepTitle>Onayla</StepTitle>
                 <StepDescription>
                   Sezgi'nin senin için bulduğu ve resmettiği kavramlardan doğru olanı tek bir tıkla seç.
                 </StepDescription>
               </StepCard>
 
               <StepCard>
-                <StepHeader>
-                  <StepIconContainer>
-                    ✨
-                  </StepIconContainer>
-                  <StepTitle>Keşfet</StepTitle>
-                </StepHeader>
+                <StepIconContainer>
+                  ✨
+                </StepIconContainer>
+                <StepTitle>Keşfet</StepTitle>
                 <StepDescription>
                   Artık adını bildiğin o ürünün en iyi alternatiflerini anında karşına getirelim.
                 </StepDescription>
