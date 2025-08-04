@@ -27,7 +27,9 @@ from vertexai.preview.vision_models import ImageGenerationModel
 from app.agent import process_product_for_tags, run_tag_generation_with_visual, run_simple_tag_generation
 from app.models import (ProductCard, ProductCollection, TagGenerationRequest, 
                        TagGenerationResponse, EcommerceProduct, SearchRequest, SearchResponse,
-                       ABTestRequest, ABTestInfo, ABTestResponse)
+                       ABTestRequest, ABTestInfo, ABTestResponse, SuggestionsTextRequest,
+                       SuggestionsTextResponse, SuggestionImagesRequest, SuggestionImagesResponse,
+                       ProductTextOnly)
 
 # Import database functions
 from app.database import (
@@ -636,6 +638,156 @@ async def get_similar_products(req: ProductTagRequest):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Similar products search failed: {e}")
+
+@router.post("/generate_suggestions_text", response_model=SuggestionsTextResponse)
+def generate_suggestions_text(req: SuggestionsTextRequest):
+    """
+    İlk aşama: Kullanıcı açıklamasından hızlı text-only ürün önerileri oluştur
+    Bu endpoint sadece LLM text generation yapar, image generation yapmaz (hızlı)
+    """
+    # --- Environment Variable Checks ---
+    api_key = os.getenv("GEMINI_API_KEY")
+    
+    if not api_key:
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY environment variable is not set.")
+
+    # --- AŞAMA 1: SİSTEM TALİMATINI GÜNCELLEME ---
+    system_instructions = (
+    "Sen bir e-ticaret asistanısın. "
+    "Görevin, ürün ismi unutan insanların yaptığı belirsiz Türkçe tanımlara dayanarak onlara ürün önermektir. "
+    "**Sana gelen tüm kullanıcı istekleri ve ürün tanımları istisnasız olarak Türkçe'dir. Girdi ne kadar kısa veya belirsiz olursa olsun, bunu daima bir Türkçe kelime veya ifade olarak yorumla ve bu dildeki en olası ürün karşılıklarını bulmaya odaklan.** "
+    "Önce, kaç tane ürün önereceğini belirle (2, 3 veya 4). Eğer kullanıcının tarifi çok spesifikse 2, orta düzeyde açıksa 3, çok genişse ve birbirinden farklı viable seçenekler bulabiliyorsan 4 öneri yap. "
+    "Bu sayıyı 'number_of_cards' alanında belirt. "
+    "Bu önerileri, kullanıcının tarifine en çok uyandan en az uyana doğru sıralamalısın. "
+    "Sonucu sadece JSON formatında döndür. JSON şu yapıda olmalı: { 'number_of_cards': [2, 3 veya 4], 'urunler': [...] }. "
+    "Her ürün listesi objesi 'urun_adi' (Türkçe), 'urun_aciklama' (Türkçe), 'urun_adi_en' (İngilizce) ve 'visual_representation' (İngilizce) alanları içermelidir. 'urun_aciklama' alanı 25 ile 40 karakter arasında olmalı. "
+    "Bu 'visual_representation' alanı, bir görsel üretim yapay zekası için talimattır. Ürünün markasız, jenerik bir versiyonunun nasıl göründüğünü detaylıca tarif etmelidir. Üründe renk sınırlaması yoktur. "
+    "Örneğin, 'derz dolgusu' için 'a tube of thick paste-like grout filler with a nozzle at the end, shown next to a small amount of the product squeezed out' gibi bir tanım olmalıdır. "
+    "Bu tanım, ürünün fiziksel özelliklerini, şeklini ve materyalini içermeli ancak marka, yazı veya logo içermemelidir. "
+    "Ayrıca, bu tanım ürünün tamamının görüneceği ve hiçbir parçasının kırpılmayacağı/kesilmeyeceği şekilde yapılmalıdır. "
+    "JSON dışında kesinlikle başka metin ekleme."
+)
+
+    combined_prompt = f"{system_instructions}\n\nKullanıcı tarifi: '{req.description}'"
+    text_generation_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    payload = {"contents": [{"parts": [{"text": combined_prompt}]}]}
+
+    try:
+        # --- Text Generation Only (Fast) ---
+        response = requests.post(text_generation_url, json=payload, timeout=90)
+        response.raise_for_status()
+
+        gemini_response_text = response.json()['candidates'][0]['content']['parts'][0]['text']
+        if gemini_response_text.strip().startswith("```json"):
+            gemini_response_text = gemini_response_text.strip()[7:-3].strip()
+        
+        product_data = json.loads(gemini_response_text)
+        number_of_cards = product_data.get("number_of_cards", 4)
+        products_raw = product_data.get("urunler", [])
+        
+        # Ensure we don't exceed the specified number of cards
+        products_raw = products_raw[:number_of_cards]
+
+        print(f"[TEXT_ONLY] Number of cards: {number_of_cards}")
+        print(f"[TEXT_ONLY] Products: {products_raw}")
+        
+        # Convert to ProductTextOnly objects
+        products = [
+            ProductTextOnly(
+                urun_adi=p.get('urun_adi', ''),
+                urun_aciklama=p.get('urun_aciklama', ''),
+                urun_adi_en=p.get('urun_adi_en', ''),
+                visual_representation=p.get('visual_representation', '')
+            ) for p in products_raw
+        ]
+        
+        return SuggestionsTextResponse(
+            number_of_cards=number_of_cards,
+            products=products
+        )
+
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"API request failed: {e}")
+    except (KeyError, IndexError, json.JSONDecodeError) as e:
+        raise HTTPException(status_code=500, detail=f"Failed to parse LLM response: {e}, Response Text: {gemini_response_text}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
+
+@router.post("/generate_suggestion_images", response_model=SuggestionImagesResponse)
+def generate_suggestion_images(req: SuggestionImagesRequest):
+    """
+    İkinci aşama: Text-only ürün listesini alıp sadece image generation yapar
+    Bu endpoint yavaş çünkü concurrent image generation işlemi yapar
+    """
+    # --- Environment Variable Checks ---
+    project_id = os.getenv("GCP_PROJECT_ID")
+    location = os.getenv("GCP_REGION")
+
+    if not all([project_id, location]):
+        raise HTTPException(status_code=500, detail="Required environment variables (GCP_PROJECT_ID, GCP_REGION) are not set.")
+
+    # --- Initialize Vertex AI ---
+    try:
+        vertexai.init(project=project_id, location=location)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to initialize Vertex AI: {e}")
+
+    try:
+        # Convert ProductTextOnly to dict format for image generation
+        products_dict = []
+        for p in req.products:
+            product_dict = {
+                "urun_adi": p.urun_adi,
+                "urun_aciklama": p.urun_aciklama,
+                "urun_adi_en": p.urun_adi_en,
+                "visual_representation": p.visual_representation,
+                "image_base64": None  # Will be populated by image generation
+            }
+            products_dict.append(product_dict)
+
+        print(f"[IMAGE_GEN] Starting image generation for {len(products_dict)} products")
+
+        # --- Concurrent Image Generation ---
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            # Submit all image generation tasks to the thread pool
+            future_to_product = {executor.submit(generate_and_encode_image, p): p for p in products_dict}
+            
+            # Collect results as they complete
+            updated_products = []
+            for future in as_completed(future_to_product):
+                try:
+                    updated_product = future.result()
+                    updated_products.append(updated_product)
+                    print(f"[IMAGE_GEN] Added product: {updated_product.get('urun_adi')} - Total so far: {len(updated_products)}")
+                except Exception as exc:
+                    print(f"[IMAGE_GEN] A product image generation task generated an exception: {exc}")
+                    # Add the original product without an image
+                    original_product = future_to_product[future]
+                    original_product['image_base64'] = None
+                    updated_products.append(original_product)
+                    print(f"[IMAGE_GEN] Added failed product: {original_product.get('urun_adi')} - Total so far: {len(updated_products)}")
+            
+            print(f"[IMAGE_GEN] Final response: products_count={len(updated_products)}")
+            
+            # Convert back to ProductCard objects
+            product_cards = []
+            for p in updated_products:
+                card = ProductCard(
+                    urun_adi=p.get('urun_adi', ''),
+                    urun_aciklama=p.get('urun_aciklama', ''),
+                    urun_adi_en=p.get('urun_adi_en', ''),
+                    visual_representation=p.get('visual_representation', ''),
+                    image_base64=p.get('image_base64')
+                )
+                product_cards.append(card)
+            
+            return SuggestionImagesResponse(
+                number_of_cards=len(product_cards),
+                products=product_cards
+            )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Image generation failed: {e}")
 
 @router.post("/gemini_suggestions")
 def gemini_suggestions(req: DescriptionRequest):

@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import styled from 'styled-components';
 import ReactMarkdown from 'react-markdown';
 import { ChatMessage, Sender } from '../types';
-import { sendChatMessage, sendImageWithMessage, findSimilarProducts } from '../services/api';
+import { sendChatMessage, sendChatMessageTwoPhase, sendImageWithMessage, findSimilarProducts } from '../services/api';
 import ProductCard from './ProductCard';
 import EcommerceProductCard from './EcommerceProductCard';
+import DatabaseProductCarousel from './DatabaseProductCarousel';
 
 const Container = styled.div`
   display: flex;
@@ -62,6 +63,20 @@ const ProductsContainer = styled.div`
   padding: ${({ theme }) => theme.spacing.xs} 0;
   flex-wrap: nowrap;
   justify-content: space-between;
+  
+  /* Kartlar geldiğinde smooth reveal animasyonu */
+  animation: fadeInUp 0.6s ease-out;
+  
+  @keyframes fadeInUp {
+    0% {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 `;
 
 const EcommerceGrid = styled.div`
@@ -116,6 +131,102 @@ const LoadingIndicator = styled.div`
   color: ${({ theme }) => theme.colors.text.secondary};
   font-style: italic;
   align-self: flex-start;
+`;
+
+// Ghost Card Components
+const GhostCard = styled.div`
+  width: 180px;
+  background-color: ${({ theme }) => theme.colors.surface};
+  border: 1px solid ${({ theme }) => theme.colors.grey[300]};
+  border-radius: ${({ theme }) => theme.borderRadius.lg};
+  padding: ${({ theme }) => theme.spacing.md};
+  display: flex;
+  flex-direction: column;
+  gap: ${({ theme }) => theme.spacing.sm};
+  position: relative;
+  overflow: hidden;
+  
+  /* Shimmer animasyonu için base */
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.4),
+      transparent
+    );
+    animation: shimmer 1.5s infinite;
+    z-index: 1;
+  }
+  
+  @keyframes shimmer {
+    0% {
+      left: -100%;
+    }
+    100% {
+      left: 100%;
+    }
+  }
+`;
+
+const GhostImage = styled.div`
+  width: 100%;
+  height: 120px;
+  background-color: ${({ theme }) => theme.colors.grey[200]};
+  border-radius: ${({ theme }) => theme.borderRadius.md};
+  animation: pulse 1.5s ease-in-out infinite alternate;
+  
+  @keyframes pulse {
+    0% {
+      opacity: 0.6;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+`;
+
+const GhostTitle = styled.div`
+  height: 16px;
+  background-color: ${({ theme }) => theme.colors.grey[200]};
+  border-radius: 4px;
+  width: 80%;
+  animation: pulse 1.5s ease-in-out infinite alternate;
+`;
+
+const GhostDescription = styled.div`
+  height: 12px;
+  background-color: ${({ theme }) => theme.colors.grey[200]};
+  border-radius: 4px;
+  width: 100%;
+  margin-bottom: 4px;
+  animation: pulse 1.5s ease-in-out infinite alternate;
+  
+  &:last-child {
+    width: 60%;
+  }
+`;
+
+const GhostPrice = styled.div`
+  height: 14px;
+  background-color: ${({ theme }) => theme.colors.grey[200]};
+  border-radius: 4px;
+  width: 50%;
+  margin-top: 8px;
+  animation: pulse 1.5s ease-in-out infinite alternate;
+`;
+
+const GhostProductsContainer = styled.div`
+  display: flex;
+  gap: ${({ theme }) => theme.spacing.sm};
+  padding: ${({ theme }) => theme.spacing.xs} 0;
+  flex-wrap: nowrap;
+  justify-content: space-between;
 `;
 
 const RetryButton = styled.button`
@@ -208,6 +319,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ initialMessage }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [expectedProductCount, setExpectedProductCount] = useState(0); // Ghost cards sayısı
+  const [showGhostCards, setShowGhostCards] = useState(false); // Ghost cards gösterilsin mi?
+  const [loadingMessage, setLoadingMessage] = useState('🔎 Harika, ipuçlarını birleştiriyorum...'); // Dynamic loading message
 
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -246,9 +360,18 @@ const ChatPage: React.FC<ChatPageProps> = ({ initialMessage }) => {
     const messagesWithUser = [...messagesRef.current, userMessage];
     setMessages(messagesWithUser);
     setIsLoading(true);
+    setShowGhostCards(false); // Reset ghost cards
+    setLoadingMessage('🔎 Harika, ipuçlarını birleştiriyorum...'); // Reset loading message
 
     try {
-      const response = await sendChatMessage(textToSend);
+      // Use two-phase API with ghost cards callback
+      const response = await sendChatMessageTwoPhase(textToSend, (ghostCardCount) => {
+        // Phase 1 completed: Show ghost cards immediately and update message
+        console.log(`[GHOST_CARDS] Showing ${ghostCardCount} ghost cards`);
+        setExpectedProductCount(ghostCardCount);
+        setShowGhostCards(true);
+        setLoadingMessage('🎨 Aradığın ürünleri görselleştiriyorum, birkaç saniye sürebilir.');
+      });
       
       const llmMessage: ChatMessage = {
         sender: Sender.LLM,
@@ -256,10 +379,16 @@ const ChatPage: React.FC<ChatPageProps> = ({ initialMessage }) => {
         products: response.products,
         searchResults: response.search_results,
         tagResult: response.tag_result,
+        numberOfCards: response.number_of_cards,
       };
+      
+      // Ghost cards'ı gizle ve gerçek mesajı göster
+      setShowGhostCards(false);
       setMessages([...messagesWithUser, llmMessage]);
     } catch (error) {
       console.error('Error sending message:', error);
+      setShowGhostCards(false); // Hata durumunda ghost cards'ı gizle
+      setLoadingMessage('🔎 Harika, ipuçlarını birleştiriyorum...'); // Reset loading message on error
       const errorMessage: ChatMessage = {
         sender: Sender.LLM,
         text: 'Üzgünüm, bir hata oluştu. Lütfen tekrar deneyin.',
@@ -278,6 +407,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ initialMessage }) => {
 
   const handleShowSimilar = async (productName: string, productDescription?: string) => {
     setIsLoading(true);
+    setShowGhostCards(false); // Similar products için ghost cards gerekmiyor
+    setLoadingMessage('Benzer ürünler aranıyor...'); // Different message for similar products
     
     try {
       // Use agentic AI workflow: tag generation → cosine similarity search
@@ -332,6 +463,25 @@ const ChatPage: React.FC<ChatPageProps> = ({ initialMessage }) => {
     setSearchQuery('');
   };
 
+  // Ghost Cards render fonksiyonu
+  const renderGhostCards = (count: number) => {
+    return (
+      <ProductsBubble>
+        <GhostProductsContainer>
+          {Array.from({ length: count }, (_, index) => (
+            <GhostCard key={`ghost-${index}`}>
+              <GhostImage />
+              <GhostTitle />
+              <GhostDescription />
+              <GhostDescription />
+              <GhostPrice />
+            </GhostCard>
+          ))}
+        </GhostProductsContainer>
+      </ProductsBubble>
+    );
+  };
+
 
 
 
@@ -346,22 +496,36 @@ const ChatPage: React.FC<ChatPageProps> = ({ initialMessage }) => {
       </MessageBubble>
 
       {message.products && message.products.length > 0 && (
-        <ProductsBubble>
-          <ProductsContainer>
-            {message.products.map((product, idx) => (
-              <ProductCard 
-                key={idx} 
-                product={product}
-                onShowSimilar={message.fromDatabase ? undefined : handleShowSimilar}
-              />
-            ))}
-          </ProductsContainer>
-          {message.sender === Sender.LLM && !message.fromDatabase && (
-            <RetryButton onClick={() => handleRetrySearch(index)}>
-              Hiçbiri değil, tekrar tarif edeyim
-            </RetryButton>
+        <>
+          {message.fromDatabase ? (
+            // Database ürünleri için carousel kullan - bubble dışında
+            <DatabaseProductCarousel 
+              products={message.products}
+              onSeeAll={() => {
+                // Tümünü gör fonksiyonu - şimdilik console log
+                console.log('Tüm database ürünlerini göster');
+              }}
+            />
+          ) : (
+            // AI generated ürünler için mevcut layout - bubble içinde
+            <ProductsBubble>
+              <ProductsContainer>
+                {message.products.map((product, idx) => (
+                  <ProductCard 
+                    key={idx} 
+                    product={product}
+                    onShowSimilar={handleShowSimilar}
+                  />
+                ))}
+              </ProductsContainer>
+              {message.sender === Sender.LLM && (
+                <RetryButton onClick={() => handleRetrySearch(index)}>
+                  Hiçbiri değil, tekrar tarif edeyim
+                </RetryButton>
+              )}
+            </ProductsBubble>
           )}
-        </ProductsBubble>
+        </>
       )}
 
       {message.searchResults && message.searchResults.length > 0 && (
@@ -394,10 +558,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ initialMessage }) => {
       <MessagesContainer ref={messagesContainerRef} onScroll={handleScroll}>
         {messages.map(renderMessage)}
         {isLoading && (
-          <LoadingIndicator>
-            <span>🤖</span>
-            <span>Düşünüyorum...</span>
-          </LoadingIndicator>
+          <MessageWrapper sender={Sender.LLM}>
+            <LoadingIndicator>
+              <span></span>
+              <span>{loadingMessage}</span>
+            </LoadingIndicator>
+            {showGhostCards && renderGhostCards(expectedProductCount)}
+          </MessageWrapper>
         )}
         <div ref={messagesEndRef} />
       </MessagesContainer>

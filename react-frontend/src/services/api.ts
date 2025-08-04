@@ -15,6 +15,25 @@ export interface ChatResponse {
   products?: Product[];
   search_results?: EcommerceProduct[];
   tag_result?: any;
+  number_of_cards?: number; // Backend'den gelen ghost cards sayısı
+}
+
+// Two-phase API interfaces
+export interface TextOnlyProduct {
+  urun_adi: string;
+  urun_aciklama: string;
+  urun_adi_en: string;
+  visual_representation: string;
+}
+
+export interface SuggestionsTextResponse {
+  number_of_cards: number;
+  products: TextOnlyProduct[];
+}
+
+export interface SuggestionsImagesResponse {
+  number_of_cards: number;
+  products: Product[];
 }
 
 export interface ABTestStartRequest {
@@ -25,7 +44,63 @@ export interface ABTestStartRequest {
   start_date: string;
 }
 
-// Chat API calls - using the original flow
+// Two-phase API calls
+export const getSuggestionsText = async (message: string): Promise<SuggestionsTextResponse> => {
+  const response = await api.post('/generate_suggestions_text', {
+    description: message
+  });
+  return response.data;
+};
+
+export const getSuggestionsImages = async (textOnlyProducts: TextOnlyProduct[]): Promise<SuggestionsImagesResponse> => {
+  const response = await api.post('/generate_suggestion_images', {
+    products: textOnlyProducts
+  });
+  return response.data;
+};
+
+// New two-phase chat message function
+export const sendChatMessageTwoPhase = async (
+  message: string,
+  onGhostCardsReady?: (count: number) => void
+): Promise<ChatResponse> => {
+  try {
+    // Phase 1: Get text-only suggestions (Fast)
+    console.log('[PHASE 1] Getting text suggestions...');
+    const textResponse = await getSuggestionsText(message);
+    
+    // Trigger ghost cards immediately
+    if (onGhostCardsReady) {
+      onGhostCardsReady(textResponse.number_of_cards);
+    }
+    
+    console.log(`[PHASE 1] Got ${textResponse.number_of_cards} text suggestions`);
+    
+    // Phase 2: Generate images (Slow)
+    console.log('[PHASE 2] Generating images...');
+    const imagesResponse = await getSuggestionsImages(textResponse.products);
+    
+    console.log(`[PHASE 2] Generated images for ${imagesResponse.products.length} products`);
+    
+    return {
+      response: `🤔 Aradığın 'o şey' bunlardan biri olabilir mi?`,
+      products: imagesResponse.products.map(createProductFromJson),
+      search_results: [],
+      tag_result: undefined,
+      number_of_cards: imagesResponse.number_of_cards
+    };
+  } catch (error) {
+    console.error('Two-phase API Error:', error);
+    return {
+      response: 'Üzgünüm, şu anda hizmet kullanılamıyor. Lütfen daha sonra tekrar deneyin.',
+      products: [],
+      search_results: [],
+      tag_result: undefined
+    };
+  }
+};
+
+// Legacy single-phase function (keeping for backward compatibility)
 export const sendChatMessage = async (message: string): Promise<ChatResponse> => {
   try {
     // Use gemini_suggestions endpoint for initial image generation
@@ -35,12 +110,12 @@ export const sendChatMessage = async (message: string): Promise<ChatResponse> =>
     
     return {
       // response: `"${message}" için ${response.data.number_of_cards || 0} ürün önerisi oluşturuldu:`,
-      // response: `Hmm... Sanırım aklındaki 'o şey'i buldum. Bunlardan biri miydi?`,
-      response: `Hmm... tarifin zihnimde bir şeyler canlandırdı. Aradığın 'o şey'in bu olabilir mi?`,
+      response: `🤔 Aradığın 'o şey' bunlardan biri olabilir mi?`,
 
       products: (response.data.products || []).map(createProductFromJson),
       search_results: [],
-      tag_result: undefined
+      tag_result: undefined,
+      number_of_cards: response.data.number_of_cards // Backend'den gelen ghost cards sayısı
     };
   } catch (error) {
     console.error('API Error:', error);

@@ -249,8 +249,19 @@ async def search_ecommerce_products_via_mcp_agent(tags: List[str], limit: int = 
                     
                     # MCP response wrapper'ını handle et
                     if isinstance(parsed_data, dict) and 'search_ecommerce_products_by_tags_response' in parsed_data:
-                        products_data = parsed_data['search_ecommerce_products_by_tags_response'].get('result', [])
-                        print(f"   📦 Found MCP wrapped response with {len(products_data)} products")
+                        result_data = parsed_data['search_ecommerce_products_by_tags_response'].get('result', [])
+                        
+                        # Check if result is a JSON string that needs to be parsed again
+                        if isinstance(result_data, str):
+                            try:
+                                products_data = json.loads(result_data)
+                                print(f"   📦 Found MCP wrapped response with {len(products_data)} products")
+                            except json.JSONDecodeError:
+                                print(f"   ⚠️ Failed to parse result string as JSON")
+                                products_data = []
+                        else:
+                            products_data = result_data
+                            print(f"   📦 Found MCP wrapped response with {len(products_data)} products")
                     elif isinstance(parsed_data, list):
                         products_data = parsed_data
                         print(f"   📝 Found direct array with {len(products_data)} products")
@@ -333,16 +344,17 @@ async def search_ecommerce_products_fallback(tags: List[str], limit: int = 8) ->
         return []
 
 # Main search function that tries MCP first, then fallback, then applies cosine similarity
-async def search_ecommerce_products_async(tags: List[str], limit: int = 1000) -> List[dict]:
+async def search_ecommerce_products_async(tags: List[str], limit: int = 8) -> List[dict]:
     """Main search function: MCP first, fallback second, cosine similarity filtering"""
     try:
         print(f"🔍 [STEP 1] Getting all products from MCP...")
-        # İlk önce daha fazla ürün iste (cosine similarity filtreleme için)
-        all_products = await search_ecommerce_products_via_mcp_agent(tags, limit=limit*3)
+        # İlk önce daha fazla ürün iste (cosine similarity filtreleme için) - limit reasonable olarak ayarla
+        search_limit = min(100, limit * 5)  # Mak 100 ürün iste, küçük DB için yeterli
+        all_products = await search_ecommerce_products_via_mcp_agent(tags, limit=search_limit)
         
         if not all_products:
             print(f"   🔄 No products from MCP, trying fallback...")
-            all_products = await search_ecommerce_products_fallback(tags, limit=limit*3)
+            all_products = await search_ecommerce_products_fallback(tags, limit=search_limit)
         
         if not all_products:
             print(f"   ❌ No products found")
@@ -362,6 +374,16 @@ async def search_ecommerce_products_async(tags: List[str], limit: int = 1000) ->
         final_results = similarity_results[:limit]
         
         print(f"   ✅ Cosine similarity applied: {len(final_results)} products selected")
+        print(f"📦 Found {len(final_results)} products for evaluation")
+        
+        # Debug: İlk birkaç seçilmiş ürünün tag'lerini göster  
+        for i, product in enumerate(final_results[:3]):
+            name = product.get('name', 'Unknown')
+            product_tags = product.get('tags', [])
+            similarity_score = product.get('similarity_score', 0)
+            print(f"   Selected {i+1}: {name[:30]}... Tags: {product_tags[:3] if product_tags else 'No tags'} (score: {similarity_score:.3f})")
+        
+        print(f"\n📊 [DEBUG] Final products with similarity scores:")
         for i, product in enumerate(final_results[:3]):  # İlk 3'ünü göster
             score = product.get('similarity_score', 0)
             name = product.get('name', 'Unknown')

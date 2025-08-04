@@ -452,7 +452,7 @@ const WelcomeScreen: React.FC = () => {
       <LandingWrapper isHiding={isTransitioning}>
         <Header>
           <UserIcon>
-            <img src="/user_icon.svg" alt="User" style={{width: "100%", height: "100%", objectFit: "cover"}} />
+            <img src="/user-icon.svg" alt="User" style={{width: "100%", height: "100%", objectFit: "cover"}} />
           </UserIcon>
           <BusinessLoginButton onClick={handleBusinessLogin}>
             <span className="icon">🏢</span>

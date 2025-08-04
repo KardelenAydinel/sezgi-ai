@@ -89,3 +89,29 @@ class ABTestResponse(BaseModel):
     success: bool
     message: str
     test_id: Optional[str] = None
+
+# Two-phase suggestions models
+class SuggestionsTextRequest(BaseModel):
+    """İlk aşama: Sadece text generation isteği"""
+    description: str
+
+class ProductTextOnly(BaseModel):
+    """Resim olmadan ürün bilgileri"""
+    urun_adi: str
+    urun_aciklama: str
+    urun_adi_en: str
+    visual_representation: str
+
+class SuggestionsTextResponse(BaseModel):
+    """İlk aşama: Sadece text response"""
+    number_of_cards: int
+    products: List[ProductTextOnly]
+
+class SuggestionImagesRequest(BaseModel):
+    """İkinci aşama: Image generation isteği"""
+    products: List[ProductTextOnly]
+
+class SuggestionImagesResponse(BaseModel):
+    """İkinci aşama: Resimli ürün response"""
+    number_of_cards: int
+    products: List[ProductCard]
