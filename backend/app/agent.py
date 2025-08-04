@@ -132,7 +132,7 @@ def _create_tag_generator_agent() -> Agent:
     tag_generator = Agent(
         name="Tag Generator",
         role="Visual description'dan e-ticaret tag'leri üretir",
-        model=Gemini(id="gemini-2.5-flash", api_key=GEMINI_API_KEY),
+        model=Gemini(id="gemini-2.0-flash-lite", api_key=GEMINI_API_KEY),
         instructions=[
             "Sen bir e-ticaret tag üretim uzmanısın. Visual description verildiğinde:",
             "1. Ürünün ana kategorisini belirle",
@@ -155,7 +155,7 @@ def _create_product_evaluator_agent() -> Agent:
     product_evaluator = Agent(
         name="Product Evaluator",
         role="Tag'lere göre ürün bulur ve kalitesini değerlendirir",
-        model=Gemini(id="gemini-2.5-flash", api_key=GEMINI_API_KEY),
+        model=Gemini(id="gemini-2.0-flash-lite", api_key=GEMINI_API_KEY),
         instructions=[
             "Sen bir ürün sıralama uzmanısın. Verilen tag'ler ve bulunan ürünler için:",
             "1. Her ürünün tag'lerle uyumunu değerlendir",
@@ -190,7 +190,7 @@ async def search_ecommerce_products_via_mcp_agent(tags: List[str], limit: int = 
             search_agent = Agent(
                 name="MCP Search Agent",
                 role="Database'de ürün arar",
-                model=Gemini(id="gemini-2.5-flash", api_key=GEMINI_API_KEY),
+                model=Gemini(id="gemini-2.0-flash-lite", api_key=GEMINI_API_KEY),
                 tools=[mcp_tools],
                 instructions=[
                     "Sen bir ürün arama uzmanısın.",

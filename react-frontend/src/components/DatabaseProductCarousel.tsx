@@ -8,12 +8,30 @@ const CarouselContainer = styled.div`
   width: 100%;
   max-width: 100%;
   overflow: hidden;
-  padding: 0 50px; // Navigation butonları için alan bırak
-  margin: ${({ theme }) => theme.spacing.lg} auto; // Yatay center için auto margin
-  padding-top: ${({ theme }) => theme.spacing.md}; // Ekstra üst padding
+  padding: 0 60px; // Navigation butonları için alan bırak - artırıldı
+  margin: 0 auto; // Margin 0 yapıldı, sadece yatay center için auto margin
+  padding-top: 45px; // Üst padding 45px yapıldı
+  padding-bottom: ${({ theme }) => theme.spacing.md}; // Alt padding eklendi
   display: flex;
   justify-content: center; // İçeriği yatay center'la
   align-self: center; // Chat akışında center'la
+`;
+
+const ViewAllText = styled.div`
+  position: absolute;
+  top: 25px; // 10px aşağı kaydırıldı (-10px → 0px)
+  right: 145px; // 25px sola kaydırıldı (60px → 85px)
+  color: ${({ theme }) => theme.colors.primary};
+  font-size: ${({ theme }) => theme.typography.fontSize.sm};
+  font-weight: ${({ theme }) => theme.typography.fontWeight.semiBold};
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 3;
+  
+  &:hover {
+    color: ${({ theme }) => theme.colors.secondary};
+    transform: translateY(-1px);
+  }
 `;
 
 const ScrollableContainer = styled.div`
@@ -47,7 +65,7 @@ const ScrollableContainer = styled.div`
 const CarouselWrapper = styled.div`
   display: flex;
   gap: ${({ theme }) => theme.spacing.sm};
-  padding: ${({ theme }) => theme.spacing.xs} 0;
+  padding: ${({ theme }) => theme.spacing.md} 0; // Padding artırıldı (xs -> md)
   width: fit-content;
   justify-content: flex-start; // Kartları sıralı olarak hizala
   align-items: center; // Dikey center da ekle
@@ -56,7 +74,7 @@ const CarouselWrapper = styled.div`
 const NavigationButton = styled.button<{ direction: 'left' | 'right'; disabled?: boolean; hide?: boolean }>`
   position: absolute;
   top: 50%;
-  ${({ direction }) => direction}: 125px; // 15px içeri alındı (-20px -> -5px)
+  ${({ direction }) => direction}: 125px; // 25px içeri taşındı (10px → 35px)
   transform: translateY(-50%);
   width: 40px;
   height: 40px;
@@ -190,6 +208,13 @@ const DatabaseProductCarousel: React.FC<DatabaseProductCarouselProps> = ({
 
   return (
     <CarouselContainer>
+      {/* "Tümünü Gör" yazısı - sadece ilk görünümde ve 4'ten fazla ürün varsa */}
+      {currentView === 'first' && products.length > 4 && onSeeAll && (
+        <ViewAllText onClick={onSeeAll}>
+          &gt; Tümünü Gör
+        </ViewAllText>
+      )}
+
       {/* Sol Navigation Buttonu */}
       <NavigationButton
         direction="left"
