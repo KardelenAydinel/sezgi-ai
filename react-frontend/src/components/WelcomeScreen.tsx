@@ -551,7 +551,7 @@ const WelcomeScreen: React.FC = () => {
 
   const examples = [
     "çekilebilen, ayakları koltuğun altına giren sehpa",
-    "kahve fincanının altına konan küçük tabak",
+    "fayans arasına sürülen dolgu",
     "saçımı tepede topuz yapan o sünger halka"
   ];
 

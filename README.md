@@ -93,3 +93,6 @@ Bu mimari, hem daha isabetli sonuçlar üretmemizi sağlar hem de API çağrıla
     npm start
     ```
 Uygulama, `http://localhost:3000` adresinde açılacaktır. Arka uç sunucusunun `http://localhost:8000` adresinde çalıştığından emin olun.
+
+Copyright © Kardelen Aydınel, Ebru Naz Ayış 2025
+All rights reserved.
