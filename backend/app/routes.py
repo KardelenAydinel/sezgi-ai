@@ -24,7 +24,7 @@ import vertexai
 from vertexai.preview.vision_models import ImageGenerationModel
 
 # Import agent module and models
-from app.agent import process_product_for_tags, run_tag_generation_with_visual, run_simple_tag_generation
+from app.agent import process_product_for_tags, run_tag_generation_with_visual, run_simple_tag_generation, generate_ab_test_suggestion
 from app.models import (ProductCard, ProductCollection, TagGenerationRequest, 
                        TagGenerationResponse, EcommerceProduct, SearchRequest, SearchResponse,
                        ABTestRequest, ABTestInfo, ABTestResponse, SuggestionsTextRequest,
@@ -60,6 +60,19 @@ class ProductQueryRequest(BaseModel):
     """Ürün sorgulama request modeli"""
     query: str
     limit: int = 10
+
+class ABTestSuggestionRequest(BaseModel):
+    """A/B test AI suggestion request modeli"""
+    product_id: str
+    current_text: str
+    test_field: str  # 'title' or 'description'
+
+class ABTestSuggestionResponse(BaseModel):
+    """A/B test AI suggestion response modeli"""
+    suggestion: str
+    reasoning: str
+    confidence: float
+    original_text: str
 
 def resize_image(image_bytes: bytes, size: tuple[int, int] = (256, 256)) -> bytes:
     """Resizes an image to the specified size."""
@@ -879,3 +892,31 @@ def gemini_suggestions(req: DescriptionRequest):
         raise HTTPException(status_code=500, detail=f"Failed to parse LLM response: {e}, Response Text: {gemini_response_text}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
+
+@router.post("/ab-tests/ai-suggestion", response_model=ABTestSuggestionResponse)
+async def get_ab_test_ai_suggestion(req: ABTestSuggestionRequest):
+    """
+    A/B test için AI ile öneri oluştur
+    
+    Args:
+        req: AI suggestion request containing product info and current text
+        
+    Returns:
+        AI-generated suggestion with reasoning
+    """
+    try:
+        result = await generate_ab_test_suggestion(
+            product_id=req.product_id,
+            current_text=req.current_text,
+            test_field=req.test_field
+        )
+        
+        return ABTestSuggestionResponse(
+            suggestion=result['suggestion'],
+            reasoning=result['reasoning'],
+            confidence=result['confidence'],
+            original_text=result['original_text']
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI suggestion generation failed: {e}")

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
-import { BusinessProduct, Sale, Review, ABTestInfo } from '../types';
+import { BusinessProduct, Sale, Review, ABTestInfo, createABTestInfoFromJson } from '../types';
 import { getActiveABTests } from '../services/api';
 
 const Container = styled.div`
@@ -18,6 +18,30 @@ const Header = styled.header`
   box-shadow: ${({ theme }) => theme.shadows.sm};
 `;
 
+const HeaderCenter = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.spacing.md};
+`;
+
+const LogoContainer = styled.div`
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+`;
+
+const LogoImage = styled.img`
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+`;
+
 const Title = styled.h1`
   font-size: 20px;
   font-weight: ${({ theme }) => theme.typography.fontWeight.medium};
@@ -29,14 +53,17 @@ const BackButton = styled.button`
   align-items: center;
   gap: ${({ theme }) => theme.spacing.sm};
   padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.md};
-  background-color: white;
-  border: 1px solid ${({ theme }) => theme.colors.grey[300]};
-  border-radius: ${({ theme }) => theme.borderRadius.md};
+  background-color: transparent;
+  border: 1px solid ${({ theme }) => theme.colors.grey[400]};
+  border-radius: 20px;
   cursor: pointer;
+  color: ${({ theme }) => theme.colors.grey[600]};
+  font-size: ${({ theme }) => theme.typography.fontSize.sm};
   transition: all 0.2s ease;
 
   &:hover {
-    background-color: ${({ theme }) => theme.colors.grey[50]};
+    background-color: ${({ theme }) => theme.colors.grey[100]};
+    transform: translateY(-1px);
   }
 `;
 
@@ -54,11 +81,16 @@ const WelcomeSection = styled.div`
   text-align: center;
 `;
 
-const WelcomeTitle = styled.h2`
-  font-size: ${({ theme }) => theme.typography.fontSize.xxl};
-  font-weight: ${({ theme }) => theme.typography.fontWeight.bold};
+const WelcomeTitle = styled.h1`
+  font-size: 40px;
+  font-weight: ${({ theme }) => theme.typography.fontWeight.regular};
   color: ${({ theme }) => theme.colors.text.primary};
   margin-bottom: ${({ theme }) => theme.spacing.sm};
+  line-height: 1.2;
+
+  .highlight {
+    color: ${({ theme }) => theme.colors.primary};
+  }
 `;
 
 const WelcomeSubtitle = styled.p`
@@ -70,16 +102,16 @@ const WelcomeSubtitle = styled.p`
 const StatsGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: ${({ theme }) => theme.spacing.md};
-  margin-bottom: ${({ theme }) => theme.spacing.xl};
+  gap: ${({ theme }) => theme.spacing.lg};
+  margin-bottom: ${({ theme }) => theme.spacing.xxl};
 `;
 
 const StatCard = styled.div`
   background-color: ${({ theme }) => theme.colors.surface};
-  padding: ${({ theme }) => theme.spacing.lg};
+  padding: ${({ theme }) => theme.spacing.xl};
   border-radius: ${({ theme }) => theme.borderRadius.lg};
   text-align: center;
-  box-shadow: ${({ theme }) => theme.shadows.sm};
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
 `;
 
 const StatNumber = styled.div`
@@ -109,23 +141,43 @@ const SectionTitle = styled.h3`
   gap: ${({ theme }) => theme.spacing.sm};
 `;
 
+const SectionHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: ${({ theme }) => theme.spacing.md};
+`;
+
+const ViewAllButton = styled.div`
+  color: ${({ theme }) => theme.colors.primary};
+  font-size: ${({ theme }) => theme.typography.fontSize.sm};
+  font-weight: ${({ theme }) => theme.typography.fontWeight.semiBold};
+  cursor: pointer;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    color: ${({ theme }) => theme.colors.secondary};
+    transform: translateY(-1px);
+  }
+`;
+
 const ProductsGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: ${({ theme }) => theme.spacing.md};
+  gap: ${({ theme }) => theme.spacing.lg};
 `;
 
 const ProductCard = styled.div`
   background-color: ${({ theme }) => theme.colors.surface};
   border: 1px solid ${({ theme }) => theme.colors.grey[200]};
   border-radius: ${({ theme }) => theme.borderRadius.lg};
-  padding: ${({ theme }) => theme.spacing.md};
-  box-shadow: ${({ theme }) => theme.shadows.sm};
+  padding: ${({ theme }) => theme.spacing.lg};
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
   transition: all 0.2s ease;
 
   &:hover {
     transform: translateY(-2px);
-    box-shadow: ${({ theme }) => theme.shadows.md};
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
   }
 `;
 
@@ -157,7 +209,7 @@ const RatingContainer = styled.div`
 `;
 
 const Stars = styled.span`
-  color: #FFA726;
+  color: ${({ theme }) => theme.colors.primary};
 `;
 
 const SalesCount = styled.span`
@@ -172,14 +224,17 @@ const ActionButtons = styled.div`
 `;
 
 const Button = styled.button<{ variant?: 'primary' | 'secondary' }>`
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.spacing.xs};
   padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.md};
   border: 1px solid ${({ variant, theme }) => 
-    variant === 'primary' ? theme.colors.primary : theme.colors.grey[300]};
+    variant === 'primary' ? theme.colors.primary : theme.colors.grey[400]};
   background-color: ${({ variant, theme }) => 
     variant === 'primary' ? theme.colors.primary : 'transparent'};
   color: ${({ variant, theme }) => 
-    variant === 'primary' ? theme.colors.onPrimary : theme.colors.text.primary};
-  border-radius: ${({ theme }) => theme.borderRadius.md};
+    variant === 'primary' ? theme.colors.onPrimary : theme.colors.grey[600]};
+  border-radius: 20px;
   font-size: ${({ theme }) => theme.typography.fontSize.sm};
   font-weight: ${({ theme }) => theme.typography.fontWeight.medium};
   cursor: pointer;
@@ -187,12 +242,14 @@ const Button = styled.button<{ variant?: 'primary' | 'secondary' }>`
 
   &:hover {
     background-color: ${({ variant, theme }) => 
-      variant === 'primary' ? theme.colors.primaryVariant : theme.colors.grey[50]};
+      variant === 'primary' ? theme.colors.primaryVariant : theme.colors.grey[100]};
+    transform: translateY(-1px);
   }
 
   &:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+    transform: none;
   }
 `;
 
@@ -217,10 +274,11 @@ const ActivityCard = styled.div`
   background-color: ${({ theme }) => theme.colors.surface};
   border: 1px solid ${({ theme }) => theme.colors.grey[200]};
   border-radius: ${({ theme }) => theme.borderRadius.md};
-  padding: ${({ theme }) => theme.spacing.md};
+  padding: ${({ theme }) => theme.spacing.lg};
   display: flex;
   justify-content: space-between;
   align-items: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
 `;
 
 const ActivityInfo = styled.div`
@@ -247,34 +305,8 @@ const ActivityTime = styled.div`
 const BusinessPanel: React.FC = () => {
   const navigate = useNavigate();
   const [activeTests, setActiveTests] = useState<Map<string, ABTestInfo>>(new Map());
-
-  // Sample data (in a real app, this would come from an API)
-  const products: BusinessProduct[] = [
-    {
-      id: '1',
-      name: 'Premium Bluetooth Kulaklık',
-      description: 'Aktif gürültü önleme özellikli premium bluetooth kulaklık',
-      rating: 4.7,
-      reviewCount: 345,
-      salesCount: 1250,
-    },
-    {
-      id: '2',
-      name: 'Sport Bluetooth Kulaklık',
-      description: 'Ter ve su dirençli spor bluetooth kulaklık',
-      rating: 4.6,
-      reviewCount: 289,
-      salesCount: 850,
-    },
-    {
-      id: '3',
-      name: 'Gaming Kulaklık',
-      description: 'Profesyonel oyuncular için tasarlanmış kablolu gaming kulaklık',
-      rating: 4.8,
-      reviewCount: 456,
-      salesCount: 650,
-    },
-  ];
+  const [products, setProducts] = useState<BusinessProduct[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
 
   const recentSales: Sale[] = [
     { productName: 'Premium Bluetooth Kulaklık', amount: 899.90, date: new Date(Date.now() - 2 * 60 * 60 * 1000) },
@@ -290,19 +322,72 @@ const BusinessPanel: React.FC = () => {
 
   useEffect(() => {
     loadActiveTests();
+    loadProducts();
   }, []);
 
   const loadActiveTests = async () => {
     try {
       const tests = await getActiveABTests();
-      const testsMap = new Map();
-      tests.forEach(test => {
-        // Assuming the API returns tests with product IDs
-        testsMap.set('1', test); // This would need proper mapping in a real app
+      const testsMap = new Map<string, ABTestInfo>();
+      
+      Object.entries(tests).forEach(([productId, testData]: [string, any]) => {
+        testsMap.set(productId, createABTestInfoFromJson(testData));
       });
+      
       setActiveTests(testsMap);
     } catch (error) {
-      console.error('Error loading A/B tests:', error);
+      console.error('Failed to load active tests:', error);
+    }
+  };
+
+  const loadProducts = async () => {
+    try {
+      setIsLoadingProducts(true);
+      const response = await fetch('http://localhost:8000/ecommerce_products?limit=10');
+      const data = await response.json();
+      
+      // Convert EcommerceProduct to BusinessProduct format
+      const businessProducts: BusinessProduct[] = data.products.map((product: any) => ({
+        id: product.id,
+        name: product.name,
+        description: product.description,
+        rating: product.rating || 4.5,
+        reviewCount: product.review_count || 100,
+        salesCount: Math.floor(Math.random() * 1000) + 100 // Random sales count for demo
+      }));
+      
+      setProducts(businessProducts);
+    } catch (error) {
+      console.error('Failed to load products:', error);
+      // Fallback to hardcoded products if API fails
+      setProducts([
+        {
+          id: 'dbce18d4-f2a7-4167-99cf-932bf508da73',
+          name: 'Modern C Yan Sehpa - Siyah',
+          description: 'Minimalist tasarımlı, koltuk yanına kolayca yerleştirilebilen C şeklinde yan sehpa.',
+          rating: 4.7,
+          reviewCount: 156,
+          salesCount: 850,
+        },
+        {
+          id: 'b8a872a5-48d9-4c5f-9da1-274c4ca52762',
+          name: 'Ayarlanabilir Kucak Sehpası - Siyah',
+          description: 'Yüksekliği ayarlanabilir, tekerlekli kucak sehpası. Laptop ve tablet kullanımı için ideal.',
+          rating: 4.7,
+          reviewCount: 234,
+          salesCount: 650,
+        },
+        {
+          id: '61261e6e-094f-4caa-af19-c1c8b2acd9db',
+          name: 'Modern Orta Sehpa',
+          description: 'Geniş tablalı, modern tasarımlı oturma odası orta sehpası.',
+          rating: 4.7,
+          reviewCount: 234,
+          salesCount: 480,
+        }
+      ]);
+    } finally {
+      setIsLoadingProducts(false);
     }
   };
 
@@ -360,13 +445,23 @@ const BusinessPanel: React.FC = () => {
           <span>←</span>
           <span>Ana Sayfa</span>
         </BackButton>
-        <Title>Satıcı Paneli</Title>
+        <HeaderCenter>
+          <LogoContainer>
+            <LogoImage 
+              src="/sezgi_logo-preview.png" 
+              alt="Sezgi Logo"
+            />
+          </LogoContainer>
+          <Title>Satıcı Paneli</Title>
+        </HeaderCenter>
         <div style={{ width: '100px' }} /> {/* Spacer */}
       </Header>
 
       <Content>
         <WelcomeSection>
-          <WelcomeTitle>Hoş Geldiniz! 👋</WelcomeTitle>
+          <WelcomeTitle>
+          <span className="highlight">Hoş Geldiniz!</span>
+        </WelcomeTitle>
           <WelcomeSubtitle>
             İşletmenizi büyütün ve müşteri deneyimini iyileştirin
           </WelcomeSubtitle>
@@ -381,7 +476,12 @@ const BusinessPanel: React.FC = () => {
               <StatLabel>Günlük Satış</StatLabel>
             </StatCard>
             <StatCard>
-              <StatNumber>{averageRating.toFixed(1)}⭐</StatNumber>
+              <StatNumber>
+                {averageRating.toFixed(1)}
+                <svg style={{ width: '24px', height: '24px', marginLeft: '4px', display: 'inline-block' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>
+                </svg>
+              </StatNumber>
               <StatLabel>Ortalama Puan</StatLabel>
             </StatCard>
             <StatCard>
@@ -392,12 +492,26 @@ const BusinessPanel: React.FC = () => {
         </WelcomeSection>
 
         <Section>
-          <SectionTitle>
-            <span>📦</span>
-            Ürünleriniz
-          </SectionTitle>
+          <SectionHeader>
+            <SectionTitle style={{ marginBottom: 0 }}>
+              <svg style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                <polyline points="3.27,6.96 12,12.01 20.73,6.96"/>
+                <line x1="12" y1="22.08" x2="12" y2="12"/>
+              </svg>
+              Ürünleriniz
+            </SectionTitle>
+            <ViewAllButton onClick={() => console.log('Tümünü Gör clicked')}>
+              &gt; Tümünü Gör
+            </ViewAllButton>
+          </SectionHeader>
           <ProductsGrid>
-            {products.map(product => (
+            {isLoadingProducts ? (
+              <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '2rem' }}>
+                Ürünler yükleniyor...
+              </div>
+            ) : (
+              products.slice(0, 3).map(product => (
               <ProductCard key={product.id}>
                 {activeTests.has(product.id) && (
                   <ABTestBadge>A/B Test Aktif</ABTestBadge>
@@ -433,14 +547,19 @@ const BusinessPanel: React.FC = () => {
                   <Button variant="secondary">Düzenle</Button>
                 </ActionButtons>
               </ProductCard>
-            ))}
+              ))
+            )}
           </ProductsGrid>
         </Section>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px', marginTop: '48px' }}>
           <Section>
             <SectionTitle>
-              <span>💰</span>
+              <svg style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <circle cx="9" cy="21" r="1"></circle>
+                <circle cx="20" cy="21" r="1"></circle>
+                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+              </svg>
               Son Satışlar
             </SectionTitle>
             <RecentActivityList>
@@ -458,7 +577,9 @@ const BusinessPanel: React.FC = () => {
 
           <Section>
             <SectionTitle>
-              <span>⭐</span>
+              <svg style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>
+              </svg>
               Son Değerlendirmeler
             </SectionTitle>
             <RecentActivityList>

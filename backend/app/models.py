@@ -50,6 +50,7 @@ class EcommerceProduct(BaseModel):
     stock: int = 0
     rating: Optional[float] = None
     review_count: Optional[int] = None
+    common_queries: Optional[List[str]] = None
     
 class SearchRequest(BaseModel):
     """Arama isteği modeli"""

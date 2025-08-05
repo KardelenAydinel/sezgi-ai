@@ -14,5 +14,13 @@
     "b_variant": "Sport Bluetooth Kulakl\u0131k - Yeni Nesil",
     "start_date": "2025-07-28T20:36:45.336",
     "is_active": true
+  },
+  "8aa1d110-ecce-4520-84b4-ef54e6574744": {
+    "product_id": "8aa1d110-ecce-4520-84b4-ef54e6574744",
+    "test_field": "title",
+    "a_variant": "Open-Ear Sport Kulakl\u0131k",
+    "b_variant": "Premium Open-Ear Sport Kulakl\u0131k",
+    "start_date": "2025-08-05T15:35:55.449Z",
+    "is_active": true
   }
 }

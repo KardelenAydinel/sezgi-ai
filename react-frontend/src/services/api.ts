@@ -186,6 +186,24 @@ export const getABTestResults = async (productId: string): Promise<any> => {
   return response.data;
 };
 
+export interface ABTestSuggestionRequest {
+  product_id: string;
+  current_text: string;
+  test_field: string; // 'title' or 'description'
+}
+
+export interface ABTestSuggestionResponse {
+  suggestion: string;
+  reasoning: string;
+  confidence: number;
+  original_text: string;
+}
+
+export const getABTestAISuggestion = async (data: ABTestSuggestionRequest): Promise<ABTestSuggestionResponse> => {
+  const response = await api.post('/ab-tests/ai-suggestion', data);
+  return response.data;
+};
+
 // Similar products search for "Bunun Gibileri Göster" functionality
 export const findSimilarProducts = async (productName: string, productDescription?: string): Promise<Product[]> => {
   try {

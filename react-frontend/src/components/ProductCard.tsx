@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import styled from 'styled-components';
 import { Product } from '../types';
 
@@ -14,6 +14,7 @@ const Card = styled.div`
   flex: 1; // Allow cards to grow and shrink equally
   min-width: 150px; // Smaller minimum width to fit more cards
   max-width: 250px; // Maximum width to prevent too wide cards
+  position: relative; // For absolute positioning of heart button
 
   &:hover {
     transform: translateY(-2px);
@@ -149,6 +150,46 @@ const ActionButton = styled.button`
   }
 `;
 
+const HeartButton = styled.button<{ isLiked: boolean }>`
+  position: absolute;
+  top: ${({ theme }) => theme.spacing.sm};
+  right: ${({ theme }) => theme.spacing.sm};
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 8px ${({ isLiked }) => isLiked ? 'rgba(255, 71, 87, 0.3)' : 'rgba(0, 0, 0, 0.2)'};
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 2;
+
+  &:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px ${({ isLiked }) => isLiked ? 'rgba(255, 71, 87, 0.4)' : 'rgba(0, 0, 0, 0.3)'};
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+`;
+
+const HeartIcon = styled.svg<{ isLiked: boolean }>`
+  width: 20px;
+  height: 20px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  
+  path {
+    fill: ${({ isLiked }) => isLiked ? '#ff4757' : '#000000'};
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  transform: ${({ isLiked }) => isLiked ? 'scale(1)' : 'scale(0.9)'};
+`;
+
 
 
 interface ProductCardProps {
@@ -157,6 +198,12 @@ interface ProductCardProps {
 }
 
 const ProductCard: React.FC<ProductCardProps> = ({ product, onShowSimilar }) => {
+  const [isLiked, setIsLiked] = useState(false);
+
+  const handleHeartClick = () => {
+    setIsLiked(!isLiked);
+  };
+
   const renderStars = (rating: number) => {
     const fullStars = Math.floor(rating);
     const hasHalfStar = rating % 1 !== 0;
@@ -183,6 +230,23 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onShowSimilar }) => 
       <ProductName>{product.name}</ProductName>
       
       <ImageContainer>
+        {/* Heart button - only for database products */}
+        {!onShowSimilar && (
+          <HeartButton isLiked={isLiked} onClick={handleHeartClick}>
+            <HeartIcon 
+              xmlns="http://www.w3.org/2000/svg" 
+              viewBox="0 0 24 24"
+              isLiked={isLiked}
+            >
+              {isLiked ? (
+                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+              ) : (
+                <path d="M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5 22 5.42 19.58 3 16.5 3zm-4.4 15.55l-.1.1-.1-.1C7.14 14.24 4 11.39 4 8.5 4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5c2 0 3.5 1.5 3.5 3.5 0 2.89-3.14 5.74-7.9 10.05z"/>
+              )}
+            </HeartIcon>
+          </HeartButton>
+        )}
+        
         <ProductImage 
           src={getImageSrc()}
           alt={product.name}

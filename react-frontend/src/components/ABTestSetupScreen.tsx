@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import styled from 'styled-components';
 import { BusinessProduct } from '../types';
-import { startABTest } from '../services/api';
+import { startABTest, getABTestAISuggestion, ABTestSuggestionRequest } from '../services/api';
 
 const Container = styled.div`
   min-height: 100vh;
@@ -100,10 +100,18 @@ const Label = styled.label`
 const Select = styled.select`
   width: 100%;
   padding: ${({ theme }) => theme.spacing.md};
+  padding-right: calc(${({ theme }) => theme.spacing.md} + 30px);
   border: 1px solid ${({ theme }) => theme.colors.grey[300]};
   border-radius: ${({ theme }) => theme.borderRadius.md};
   font-size: ${({ theme }) => theme.typography.fontSize.md};
   background-color: ${({ theme }) => theme.colors.surface};
+  background-image: url('data:image/svg+xml;charset=US-ASCII,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 5"><path fill="%23666" d="M2 0L0 2h4zm0 5L0 3h4z"/></svg>');
+  background-repeat: no-repeat;
+  background-position: right calc(${({ theme }) => theme.spacing.md} + 5px) center;
+  background-size: 12px;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
   transition: border-color 0.2s ease;
 
   &:focus {
@@ -151,6 +159,7 @@ const VariantLabel = styled.h4`
   color: ${({ theme }) => theme.colors.text.primary};
   margin-bottom: ${({ theme }) => theme.spacing.sm};
   text-align: center;
+  position: relative;
 `;
 
 const InfoBox = styled.div`
@@ -159,6 +168,30 @@ const InfoBox = styled.div`
   border-radius: ${({ theme }) => theme.borderRadius.md};
   padding: ${({ theme }) => theme.spacing.md};
   margin-bottom: ${({ theme }) => theme.spacing.lg};
+  position: relative;
+`;
+
+const CloseButton = styled.button`
+  position: absolute;
+  top: ${({ theme }) => theme.spacing.sm};
+  right: ${({ theme }) => theme.spacing.sm};
+  background: transparent;
+  border: none;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 18px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background-color: ${({ theme }) => theme.colors.grey[200]};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
 `;
 
 const InfoText = styled.p`
@@ -215,6 +248,111 @@ const ErrorMessage = styled.div`
   font-size: ${({ theme }) => theme.typography.fontSize.sm};
 `;
 
+const AIButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.spacing.sm};
+  padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.md};
+  background-color: ${({ theme }) => theme.colors.primary}10;
+  border: 1px solid ${({ theme }) => theme.colors.primary}30;
+  border-radius: ${({ theme }) => theme.borderRadius.md};
+  color: ${({ theme }) => theme.colors.primary};
+  font-size: ${({ theme }) => theme.typography.fontSize.sm};
+  font-weight: ${({ theme }) => theme.typography.fontWeight.medium};
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: ${({ theme }) => theme.spacing.sm};
+
+  &:hover:not(:disabled) {
+    background-color: ${({ theme }) => theme.colors.primary}20;
+    border-color: ${({ theme }) => theme.colors.primary}50;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+`;
+
+const DisabledOverlay = styled.div`
+  position: relative;
+  cursor: not-allowed;
+  display: inline-block;
+  font-size: 0;
+  line-height: 0;
+  width: 100%;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(230, 230, 230, 0.4);
+    border-radius: ${({ theme }) => theme.borderRadius.md};
+    z-index: 1;
+    box-sizing: border-box;
+  }
+`;
+
+const VariantHelperText = styled.p`
+  font-size: ${({ theme }) => theme.typography.fontSize.xs};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  margin-top: ${({ theme }) => theme.spacing.sm};
+  padding: 0 ${({ theme }) => theme.spacing.sm};
+  text-align: center;
+  line-height: 1.4;
+`;
+
+const TooltipContainer = styled.div`
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: inline-block;
+`;
+
+const InfoIcon = styled.img`
+  width: 16px;
+  height: 16px;
+  cursor: help;
+`;
+
+const Tooltip = styled.div`
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: ${({ theme }) => theme.colors.text.primary};
+  color: white;
+  padding: ${({ theme }) => theme.spacing.sm};
+  border-radius: ${({ theme }) => theme.borderRadius.sm};
+  font-size: ${({ theme }) => theme.typography.fontSize.sm};
+  white-space: nowrap;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+  margin-bottom: ${({ theme }) => theme.spacing.xs};
+  max-width: 300px;
+  white-space: normal;
+  
+  &::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  ${TooltipContainer}:hover & {
+    opacity: 1;
+    visibility: visible;
+  }
+`;
+
 const ABTestSetupScreen: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -225,6 +363,9 @@ const ABTestSetupScreen: React.FC = () => {
   const [bVariant, setBVariant] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
+  const [isAILoading, setIsAILoading] = useState(false);
+  const [aiSuggestionResult, setAiSuggestionResult] = useState<string>('');
+  const [showInfoBox, setShowInfoBox] = useState(true);
 
   // Redirect if no product is provided
   React.useEffect(() => {
@@ -292,6 +433,37 @@ const ABTestSetupScreen: React.FC = () => {
     navigate('/business');
   };
 
+  const handleAIGenerate = async () => {
+    if (!product || !aVariant.trim()) {
+      setError('Önce A varyantını doldurmalısınız.');
+      return;
+    }
+
+    setIsAILoading(true);
+    setAiSuggestionResult('');
+    setError('');
+
+    try {
+      const request: ABTestSuggestionRequest = {
+        product_id: product.id,
+        current_text: aVariant.trim(),
+        test_field: testField
+      };
+
+      const response = await getABTestAISuggestion(request);
+      
+      // Set the AI suggestion as the B variant
+      setBVariant(response.suggestion);
+      setAiSuggestionResult(`AI Önerisi: ${response.reasoning} (Güven: ${Math.round(response.confidence * 100)}%)`);
+      
+    } catch (error) {
+      console.error('AI suggestion error:', error);
+      setError('AI önerisi oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.');
+    } finally {
+      setIsAILoading(false);
+    }
+  };
+
   return (
     <Container>
       <Header>
@@ -309,14 +481,27 @@ const ABTestSetupScreen: React.FC = () => {
           <ProductDescription>{product.description}</ProductDescription>
         </ProductInfo>
 
-        <InfoBox>
-          <InfoText>
-            <strong>A/B Testing Nedir?</strong><br />
-            A/B testing, ürününüzün farklı versiyonlarını müşterilere göstererek 
-            hangisinin daha iyi performans gösterdiğini ölçmenizi sağlar. 
-            Bu sayede daha fazla satış ve müşteri memnuniyeti elde edebilirsiniz.
-          </InfoText>
-        </InfoBox>
+        {showInfoBox && (
+          <InfoBox>
+            <CloseButton onClick={() => setShowInfoBox(false)}>
+              ×
+            </CloseButton>
+            <InfoText>
+              <strong>A/B Testing Nedir?</strong><br />
+              A/B testi, ürününüze ait sayfanın iki farklı versiyonunu (A ve B) karşılaştırarak 
+              hangisinin daha fazla satış ve müşteri etkileşimi getirdiğini ölçmenizi sağlayan 
+              güçlü bir yöntemdir. Bu sayede müşteri davranışlarını analiz ederek tahminlere 
+              değil, somut verilere dayalı kararlar alabilirsiniz.
+              <br />
+              <br />
+              <strong>Yapay Zeka Destekli B Varyantı ile Tanışın!</strong><br />
+              Platformumuza entegre yapay zeka, genel satış trendlerini ve müşteri davranışlarını analiz eder ve size yüksek performans potansiyeline sahip B varyantı 
+              önerileri sunar. Bu sayede en etkili değişiklikleri kolayca test edebilir ve 
+              satışlarınızı artırabilirsiniz.
+
+            </InfoText>
+          </InfoBox>
+        )}
 
         <FormSection>
           <SectionTitle>
@@ -339,22 +524,45 @@ const ABTestSetupScreen: React.FC = () => {
           <FormGroup>
             <Label>Varyantlar</Label>
             <VariantContainer>
-              <VariantCard>
+              <VariantCard style={{ paddingBottom: 0 }}>
                 <VariantLabel>A Varyantı (Mevcut)</VariantLabel>
-                <TextArea
-                  value={aVariant}
-                  onChange={(e) => setAVariant(e.target.value)}
-                  placeholder={testField === 'title' ? 'Mevcut ürün başlığı' : 'Mevcut ürün açıklaması'}
-                />
+                <DisabledOverlay>
+                  <TextArea
+                    value={aVariant}
+                    readOnly
+                    placeholder={testField === 'title' ? 'Mevcut ürün başlığı' : 'Mevcut ürün açıklaması'}
+                  />
+                </DisabledOverlay>
+                <VariantHelperText>
+                  A Varyantı, ürününüzün mevcut durumunu temsil eder. Değişiklik yapmak için Satıcı Paneli'nden ürünü düzenleyebilirsiniz.
+                </VariantHelperText>
               </VariantCard>
               
               <VariantCard>
-                <VariantLabel>B Varyantı (Yeni)</VariantLabel>
+                <VariantLabel>
+                  B Varyantı (Yeni)
+                  <TooltipContainer>
+                    <InfoIcon src="/info_symbol.png" alt="Info" />
+                    <Tooltip>
+                      Manuel olarak karar verebilir veya yapay zekamızın önerilerinden yararlanabilirsiniz.
+                    </Tooltip>
+                  </TooltipContainer>
+                </VariantLabel>
                 <TextArea
                   value={bVariant}
                   onChange={(e) => setBVariant(e.target.value)}
                   placeholder={testField === 'title' ? 'Yeni ürün başlığı' : 'Yeni ürün açıklaması'}
                 />
+                <AIButton 
+                  onClick={handleAIGenerate}
+                  disabled={isAILoading || !aVariant.trim()}
+                >
+                  <span>✨</span>
+                  {isAILoading ? 'AI ile Oluşturuluyor...' : 'AI ile Oluştur'}
+                </AIButton>
+                {aiSuggestionResult && (
+                  <VariantHelperText>{aiSuggestionResult}</VariantHelperText>
+                )}
               </VariantCard>
             </VariantContainer>
           </FormGroup>
@@ -363,8 +571,8 @@ const ABTestSetupScreen: React.FC = () => {
 
           <InfoBox>
             <InfoText>
-              <strong>Önemli:</strong> Test en az 7 gün sürmeli ve her varyant 
-              minimum 100 görüntülenme almalıdır. Anlamlı sonuçlar için sabırlı olun.
+              <strong>İpucu:</strong> Güvenilir sonuçlara ulaşmak adına testinizi en az 7 gün aktif tutmanızı ve her seçeneğin minimum 100 defa görülmesini beklemenizi öneririz.
+
             </InfoText>
           </InfoBox>
 

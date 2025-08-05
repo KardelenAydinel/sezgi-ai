@@ -75,16 +75,103 @@ const HeaderLine = styled.div`
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
 `;
 
-const UserIcon = styled.div`
+const HamburgerMenu = styled.button<{ isOpen: boolean }>`
   width: 32px;
   height: 32px;
-  border-radius: 50%;
   background-color: transparent;
+  border: none;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  gap: 4px;
   margin-top: 5px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 1001;
+  position: relative;
+
+  &:hover {
+    opacity: 0.7;
+  }
+
+  .line {
+    width: 20px;
+    height: 1.5px;
+    background-color: ${({ theme }) => theme.colors.grey[400]};
+    border-radius: 1px;
+    transition: all 0.3s ease;
+  }
+`;
+
+const SideMenuOverlay = styled.div<{ isOpen: boolean }>`
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+  opacity: ${({ isOpen }) => isOpen ? 1 : 0};
+  visibility: ${({ isOpen }) => isOpen ? 'visible' : 'hidden'};
+  transition: all 0.3s ease;
+`;
+
+const SideMenu = styled.div<{ isOpen: boolean }>`
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 280px;
+  height: 100vh;
+  background-color: white;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  transform: translateX(${({ isOpen }) => isOpen ? '0' : '-100%'});
+  transition: transform 0.3s ease;
+  display: flex;
+  flex-direction: column;
+`;
+
+const SideMenuHeader = styled.div`
+  padding: ${({ theme }) => theme.spacing.lg};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.grey[200]};
+  
+  h3 {
+    margin: 0;
+    font-size: ${({ theme }) => theme.typography.fontSize.lg};
+    font-weight: ${({ theme }) => theme.typography.fontWeight.semiBold};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`;
+
+const SideMenuContent = styled.div`
+  flex: 1;
+  padding: ${({ theme }) => theme.spacing.md} 0;
+`;
+
+const SideMenuItem = styled.button`
+  width: 100%;
+  padding: ${({ theme }) => theme.spacing.md} ${({ theme }) => theme.spacing.lg};
+  background-color: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: ${({ theme }) => theme.typography.fontSize.md};
+  color: ${({ theme }) => theme.colors.text.primary};
+  transition: background-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.spacing.sm};
+
+  &:hover {
+    background-color: ${({ theme }) => theme.colors.grey[100]};
+  }
+
+  .icon {
+    font-size: 20px;
+    width: 24px;
+    text-align: center;
+  }
 `;
 
 const BusinessLoginButton = styled.button`
@@ -388,6 +475,7 @@ const WelcomeScreen: React.FC = () => {
   const [showChat, setShowChat] = useState(false);
   const [initialMessage, setInitialMessage] = useState('');
   const [currentPlaceholderIndex, setCurrentPlaceholderIndex] = useState(0);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const placeholderExamples = [
     "Prize takılan gece lambası...",
@@ -423,6 +511,20 @@ const WelcomeScreen: React.FC = () => {
     navigate('/business');
   };
 
+  const handleMenuClick = () => {
+    setIsMenuOpen(!isMenuOpen);
+  };
+
+  const handleMenuItemClick = (item: string) => {
+    console.log(`${item} tıklandı`);
+    setIsMenuOpen(false);
+    // TODO: Add specific functionality for each menu item
+  };
+
+  const handleOverlayClick = () => {
+    setIsMenuOpen(false);
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleSearch();
@@ -448,12 +550,38 @@ const WelcomeScreen: React.FC = () => {
 
   return (
     <Container>
+      {/* Side Menu Overlay */}
+      <SideMenuOverlay isOpen={isMenuOpen} onClick={handleOverlayClick} />
+      
+      {/* Side Menu */}
+      <SideMenu isOpen={isMenuOpen}>
+        <SideMenuHeader>
+          {/*<h3>Menü</h3>*/}
+        </SideMenuHeader>
+        <SideMenuContent>
+          <SideMenuItem onClick={() => handleMenuItemClick('Kullanıcı Hesabım')}>
+            <span className="icon"></span>
+            <span>Kullanıcı Hesabım</span>
+          </SideMenuItem>
+          <SideMenuItem onClick={() => handleMenuItemClick('Favorilerim')}>
+            <span className="icon"></span>
+            <span>Favorilerim</span>
+          </SideMenuItem>
+          <SideMenuItem onClick={() => handleMenuItemClick('Sepetim')}>
+            <span className="icon"></span>
+            <span>Sepetim</span>
+          </SideMenuItem>
+        </SideMenuContent>
+      </SideMenu>
+
       {/* Landing Page */}
       <LandingWrapper isHiding={isTransitioning}>
         <Header>
-          <UserIcon>
-            <img src="/user-icon.svg" alt="User" style={{width: "100%", height: "100%", objectFit: "cover"}} />
-          </UserIcon>
+          <HamburgerMenu isOpen={isMenuOpen} onClick={handleMenuClick}>
+            <div className="line"></div>
+            <div className="line"></div>
+            <div className="line"></div>
+          </HamburgerMenu>
           <BusinessLoginButton onClick={handleBusinessLogin}>
             <span className="icon">🏢</span>
             <span>Satıcı Girişi</span>

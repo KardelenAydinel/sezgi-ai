@@ -5,6 +5,7 @@ Contains all database initialization, CRUD operations and search functionality.
 import json
 import sqlite3
 import uuid
+import csv
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 import numpy as np
@@ -16,6 +17,7 @@ from app.models import EcommerceProduct
 # Database paths
 DB_PATH = Path(__file__).parent / "data" / "products.db"
 ECOMMERCE_DB_PATH = Path(__file__).parent / "data" / "ecommerce.db"
+CSV_PATH = Path(__file__).parent / "ecommerce_products.csv"
 
 # Ensure data directory exists
 DB_PATH.parent.mkdir(exist_ok=True)
@@ -64,6 +66,7 @@ def init_ecommerce_database():
             stock INTEGER DEFAULT 0,
             rating REAL,
             review_count INTEGER,
+            common_queries TEXT,  -- JSON string for common search queries
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -497,6 +500,218 @@ def init_ecommerce_database():
     
     conn.close()
 
+def load_ecommerce_data_from_csv():
+    """CSV dosyasından e-ticaret ürünlerini yükle"""
+    print(f"Loading e-commerce data from CSV: {CSV_PATH}")
+    
+    if not CSV_PATH.exists():
+        print(f"CSV file not found at {CSV_PATH}")
+        return []
+    
+    products = []
+    try:
+        with open(CSV_PATH, 'r', encoding='utf-8') as file:
+            lines = file.readlines()
+            
+            # İlk satır başlık, ikinci satır sütun isimleri
+            if len(lines) < 3:
+                print("CSV file has insufficient data")
+                return []
+            
+            # Header'ı parse et (2. satır)
+            header_line = lines[1].strip()
+            headers = header_line.split(';')
+            print(f"CSV Headers: {headers}")
+            
+            # Veri satırlarını parse et (3. satırdan başlayarak)
+            for line_num, line in enumerate(lines[2:], start=3):
+                line = line.strip()
+                if not line:
+                    continue
+                    
+                try:
+                    values = line.split(';')
+                    if len(values) != len(headers):
+                        print(f"Warning: Line {line_num} has {len(values)} values but expected {len(headers)}")
+                        continue
+                    
+                    # Veriyi dictionary'e dönüştür
+                    product_data = dict(zip(headers, values))
+                    
+                    # JSON stringlerini parse et
+                    try:
+                        tags_str = product_data.get('tags', '[]')
+                        # Remove outer quotes if present
+                        if tags_str.startswith('"') and tags_str.endswith('"'):
+                            tags_str = tags_str[1:-1]
+                        # Fix escaped quotes in CSV
+                        tags_str = tags_str.replace('""', '"')
+                        tags = json.loads(tags_str)
+                    except json.JSONDecodeError:
+                        tags = []
+                    
+                    try:
+                        queries_str = product_data.get('common_queries', '[]')
+                        # Remove outer quotes if present
+                        if queries_str.startswith('"') and queries_str.endswith('"'):
+                            queries_str = queries_str[1:-1]
+                        # Fix escaped quotes in CSV
+                        queries_str = queries_str.replace('""', '"')
+                        common_queries = json.loads(queries_str)
+                    except json.JSONDecodeError:
+                        common_queries = []
+                    
+                    # Numeric değerleri dönüştür
+                    try:
+                        price = float(product_data.get('price', 0))
+                        stock = int(product_data.get('stock', 0))
+                        rating = float(product_data.get('rating', 0)) if product_data.get('rating') else None
+                        review_count = int(product_data.get('review_count', 0)) if product_data.get('review_count') else None
+                    except ValueError as e:
+                        print(f"Warning: Invalid numeric data in line {line_num}: {e}")
+                        continue
+                    
+                    product = {
+                        'id': product_data.get('id'),
+                        'name': product_data.get('name', ''),
+                        'description': product_data.get('description', ''),
+                        'price': price,
+                        'currency': product_data.get('currency', 'TL'),
+                        'image_url': product_data.get('image_url'),
+                        'tags': tags,
+                        'category': product_data.get('category', ''),
+                        'subcategory': product_data.get('subcategory'),
+                        'brand': product_data.get('brand'),
+                        'stock': stock,
+                        'rating': rating,
+                        'review_count': review_count,
+                        'common_queries': common_queries
+                    }
+                    
+                    products.append(product)
+                    
+                except Exception as e:
+                    print(f"Error parsing line {line_num}: {e}")
+                    continue
+        
+        print(f"Successfully loaded {len(products)} products from CSV")
+        return products
+        
+    except Exception as e:
+        print(f"Error reading CSV file: {e}")
+        return []
+
+def init_ecommerce_database_from_csv():
+    """Initialize the e-commerce database from CSV file"""
+    conn = sqlite3.connect(ECOMMERCE_DB_PATH)
+    cursor = conn.cursor()
+    
+    # Create e-commerce products table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS ecommerce_products (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            price REAL NOT NULL,
+            currency TEXT DEFAULT 'TL',
+            image_url TEXT,
+            tags TEXT,  -- JSON string
+            category TEXT,
+            subcategory TEXT,
+            brand TEXT,
+            stock INTEGER DEFAULT 0,
+            rating REAL,
+            review_count INTEGER,
+            common_queries TEXT,  -- JSON string for common search queries
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Check if we already have products
+    cursor.execute('SELECT COUNT(*) FROM ecommerce_products')
+    if cursor.fetchone()[0] == 0:
+        print("Loading products from CSV...")
+        products = load_ecommerce_data_from_csv()
+        
+        if products:
+            # Insert all products from CSV
+            cursor.executemany('''
+                INSERT INTO ecommerce_products (
+                    id, name, description, price, currency, image_url, tags,
+                    category, subcategory, brand, stock, rating, review_count, common_queries
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', [(
+                p['id'], p['name'], p['description'], p['price'],
+                p['currency'], p['image_url'], json.dumps(p['tags']),
+                p['category'], p['subcategory'], p['brand'],
+                p['stock'], p['rating'], p['review_count'], json.dumps(p['common_queries'])
+            ) for p in products])
+            
+            conn.commit()
+            print(f"Successfully inserted {len(products)} products into database")
+        else:
+            print("No products found in CSV, falling back to dummy data")
+            # CSV bulunamazsa eski dummy data'yı kullan
+            init_ecommerce_database()
+            return
+    else:
+        print("Database already contains products, skipping CSV load")
+    
+    conn.close()
+
+def get_ecommerce_product_by_id(product_id: str) -> dict:
+    """Get ecommerce product by ID"""
+    conn = sqlite3.connect(ECOMMERCE_DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM ecommerce_products WHERE id = ?', (product_id,))
+    result = cursor.fetchone()
+    
+    if result:
+        columns = [desc[0] for desc in cursor.description]
+        product_dict = dict(zip(columns, result))
+        
+        # Parse JSON fields
+        if product_dict.get('tags'):
+            try:
+                product_dict['tags'] = json.loads(product_dict['tags'])
+            except:
+                product_dict['tags'] = []
+        
+        if product_dict.get('common_queries'):
+            try:
+                product_dict['common_queries'] = json.loads(product_dict['common_queries'])
+            except:
+                product_dict['common_queries'] = []
+        
+        conn.close()
+        return product_dict
+    
+    conn.close()
+    return None
+
+def get_common_queries_by_category(category: str) -> List[str]:
+    """Get all common queries from products in the same category"""
+    conn = sqlite3.connect(ECOMMERCE_DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT common_queries FROM ecommerce_products WHERE category = ?', (category,))
+    results = cursor.fetchall()
+    conn.close()
+    
+    all_queries = []
+    for result in results:
+        if result[0]:
+            try:
+                queries = json.loads(result[0])
+                if isinstance(queries, list):
+                    all_queries.extend(queries)
+            except:
+                continue
+    
+    # Remove duplicates and return
+    return list(set(all_queries))
+
 def search_products_by_tags(search_tags: List[str], limit: int = 4, min_price: float = None, 
                            max_price: float = None, category: str = None) -> List[EcommerceProduct]:
     """Tag'lere göre ürün arama"""
@@ -506,7 +721,7 @@ def search_products_by_tags(search_tags: List[str], limit: int = 4, min_price: f
     # Base query
     query = '''
         SELECT id, name, description, price, currency, image_url, tags, category, 
-               subcategory, brand, stock, rating, review_count
+               subcategory, brand, stock, rating, review_count, common_queries
         FROM ecommerce_products 
         WHERE stock > 0
     '''
@@ -549,6 +764,7 @@ def search_products_by_tags(search_tags: List[str], limit: int = 4, min_price: f
         similarity_score += random.uniform(0, 0.1)
         
         if similarity_score > 0:  # Only include products with at least one matching tag
+            common_queries = json.loads(row[13]) if row[13] else []
             product = EcommerceProduct(
                 id=row[0],
                 name=row[1],
@@ -562,7 +778,8 @@ def search_products_by_tags(search_tags: List[str], limit: int = 4, min_price: f
                 brand=row[9],
                 stock=row[10],
                 rating=row[11],
-                review_count=row[12]
+                review_count=row[12],
+                common_queries=common_queries
             )
             products_with_scores.append((product, similarity_score))
     
@@ -680,7 +897,7 @@ def get_all_ecommerce_products(limit: int = 20) -> List[EcommerceProduct]:
     
     cursor.execute('''
         SELECT id, name, description, price, currency, image_url, tags, category, 
-               subcategory, brand, stock, rating, review_count
+               subcategory, brand, stock, rating, review_count, common_queries
         FROM ecommerce_products 
         WHERE stock > 0
         ORDER BY rating DESC, review_count DESC
@@ -705,7 +922,8 @@ def get_all_ecommerce_products(limit: int = 20) -> List[EcommerceProduct]:
             brand=row[9],
             stock=row[10],
             rating=row[11],
-            review_count=row[12]
+            review_count=row[12],
+            common_queries=json.loads(row[13]) if row[13] else []
         )
         products.append(product)
     
@@ -715,5 +933,5 @@ def initialize_all_databases():
     """Tüm veritabanlarını başlat"""
     print("Initializing databases...")
     init_database()
-    init_ecommerce_database()
+    init_ecommerce_database_from_csv()  # CSV'den yükle
     print("Databases initialized successfully!") 

@@ -696,4 +696,254 @@ def process_product_for_tags(product: Dict[str, Any]) -> Dict[str, Any]:
     tags = generate_tags_for_product(product)
     product_with_tags = product.copy()
     product_with_tags['tags'] = tags
-    return product_with_tags 
+    return product_with_tags
+
+async def generate_ab_test_suggestion(product_id: str, current_text: str, test_field: str) -> Dict[str, Any]:
+    """
+    Generate AI-powered A/B test suggestions based on product data and common queries
+    
+    Args:
+        product_id: The product ID to get common queries for
+        current_text: Current product title or description being tested
+        test_field: 'title' or 'description' - what field is being tested
+        
+    Returns:
+        Dictionary with suggested text and reasoning
+    """
+    print("\n" + "="*80)
+    print("🧪 [A/B TEST AI] Starting AI Suggestion Generation")
+    print("="*80)
+    print(f"📋 Product ID: {product_id}")
+    print(f"📝 Current Text: {current_text[:100]}...")
+    print(f"🎯 Test Field: {test_field}")
+    print("="*80)
+    
+    if not GEMINI_API_KEY:
+        print("❌ GEMINI_API_KEY ortam değişkeni ayarlanmamış.")
+        raise ValueError("GEMINI_API_KEY ortam değişkeni ayarlanmamış.")
+
+    try:
+        # Get product data and common queries from database
+        print("\n🔍 [STEP 1] Getting product data from database...")
+        
+        from app.database import get_ecommerce_product_by_id
+        product_data = get_ecommerce_product_by_id(product_id)
+        
+        if not product_data:
+            print(f"⚠️ Product with ID {product_id} not found in database")
+            return {
+                "suggestion": current_text,
+                "reasoning": "Ürün veritabanında bulunamadı, orijinal metin kullanıldı.",
+                "confidence": 0.0
+            }
+        
+        # Extract common queries for this product
+        common_queries = product_data.get('common_queries', [])
+        if isinstance(common_queries, str):
+            try:
+                import json
+                common_queries = json.loads(common_queries)
+            except:
+                common_queries = []
+        
+        print(f"📊 Found {len(common_queries)} common queries for product: {common_queries}")
+        
+        # Get all common queries from similar products in the same category
+        print("\n🔍 [STEP 2] Getting common queries from similar products...")
+        
+        from app.database import get_common_queries_by_category
+        category_queries = get_common_queries_by_category(product_data.get('category', ''))
+        
+        print(f"📂 Found {len(category_queries)} queries from category '{product_data.get('category', '')}'")
+        
+        # Combine all queries for context
+        all_queries = list(set(common_queries + category_queries))
+        print(f"🎯 Total unique queries for analysis: {len(all_queries)}")
+        
+        # Create AI agent for suggestion generation
+        print("\n🤖 [STEP 3] Creating AI suggestion agent...")
+        
+        suggestion_agent = Agent(
+            name="A/B Test Suggestion Generator",
+            role="A/B test için ürün başlığı/açıklaması önerileri oluşturur",
+            model=Gemini(id="gemini-2.0-flash-lite", api_key=GEMINI_API_KEY),
+            instructions=[
+                "Sen bir A/B test optimizasyon uzmanısın.",
+                "Görevin, mevcut ürün başlığı/açıklamasını analiz ederek hafif değişiklikler önermektir.",
+                "Bu değişiklikler:",
+                "1. Orijinalden çok FARKLI olmamalı (A/B testin izole edilebilmesi için)",
+                "2. Kullanıcı arama sorguları verilerine dayanmalı",
+                "3. Daha dikkat çekici veya açıklayıcı olmalı",
+                "4. Aynı ürünü tanımlayabilir olmalı",
+                "5. Türkçe dilbilgisi kurallarına uygun olmalı",
+                "",
+                "Örnekler:",
+                "- 'Modern C Yan Sehpa' → 'Şık C Şeklinde Yan Sehpa'",
+                "- 'Bluetooth Kulaklık' → 'Kablosuz Bluetooth Kulaklık'", 
+                "- 'Laptop için ideal' → 'Laptop kullanımına özel tasarlandı'",
+                "",
+                "Sonucu JSON formatında döndür:",
+                "{'suggestion': 'yeni metin', 'reasoning': 'değişiklik gerekçesi', 'confidence': 0.8}"
+            ],
+            debug_mode=True
+        )
+        
+        # Prepare prompt for AI
+        queries_text = ', '.join(all_queries[:10]) if all_queries else "Özel sorgu verisi bulunamadı"
+        
+        suggestion_prompt = f"""
+        A/B Test Optimizasyonu:
+        
+        Ürün Bilgileri:
+        - Ürün Adı: {product_data.get('name', 'Bilinmiyor')}
+        - Kategori: {product_data.get('category', 'Genel')}
+        - Mevcut {test_field}: "{current_text}"
+        
+        Kullanıcı Arama Sorguları:
+        {queries_text}
+        
+        Bu {'başlık' if test_field == 'title' else 'açıklama'} için A/B test varyantı öner. 
+        Değişiklik çok radikal olmamalı ama performansı artırabilecek hafif iyileştirmeler içermeli.
+        Kullanıcı sorgu verilerini dikkate al.
+        """
+        
+        print("🔄 Sending prompt to AI agent...")
+        print(f"📝 Prompt preview: {suggestion_prompt[:200]}...")
+        
+        suggestion_response = await suggestion_agent.arun(message=suggestion_prompt)
+        print(f"✅ AI agent responded: {str(suggestion_response)[:200]}...")
+        
+        # Parse AI response
+        try:
+            if isinstance(suggestion_response, str):
+                response_content = suggestion_response
+            elif hasattr(suggestion_response, 'content'):
+                response_content = suggestion_response.content
+            else:
+                response_content = str(suggestion_response)
+            
+            # Extract JSON from response
+            import re
+            import json
+            
+            # Try to find JSON in markdown block first
+            json_match = re.search(r'```json\s*(\{.*?\})\s*```', response_content, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1)
+            else:
+                # Try to find any JSON object
+                json_match = re.search(r'\{[^{}]*"suggestion"[^{}]*\}', response_content, re.DOTALL)
+                if json_match:
+                    json_str = json_match.group()
+                else:
+                    json_str = None
+            
+            if json_str:
+                suggestion_result = json.loads(json_str)
+                suggested_text = suggestion_result.get('suggestion', current_text)
+                reasoning = suggestion_result.get('reasoning', 'AI tarafından önerildi')
+                confidence = suggestion_result.get('confidence', 0.7)
+            else:
+                # Fallback: Extract suggestion from text response
+                lines = response_content.split('\n')
+                suggested_text = current_text  # Default fallback
+                for line in lines:
+                    if 'suggestion' in line.lower() or '→' in line:
+                        # Try to extract suggested text
+                        if '→' in line:
+                            suggested_text = line.split('→')[1].strip().strip('"').strip("'")
+                        break
+                
+                reasoning = "AI yanıtından otomatik çıkarıldı"
+                confidence = 0.5
+                
+        except Exception as parse_error:
+            print(f"⚠️ AI response parsing failed: {parse_error}")
+            # Smart fallback based on common patterns
+            if test_field == 'title':
+                # Add descriptive words for titles
+                if 'modern' not in current_text.lower():
+                    suggested_text = f"Modern {current_text}"
+                elif 'şık' not in current_text.lower():
+                    suggested_text = f"Şık {current_text}"
+                else:
+                    suggested_text = current_text.replace(' ', ' Premium ')
+            else:
+                # Add compelling words for descriptions
+                if 'ideal' not in current_text.lower():
+                    suggested_text = f"{current_text} İdeal tasarım."
+                elif 'özel' not in current_text.lower():
+                    suggested_text = f"Özel olarak tasarlanmış {current_text.lower()}"
+                else:
+                    suggested_text = current_text + " Yüksek kalite garantisi."
+            
+            reasoning = f"Parsing hatası nedeniyle otomatik öneri: {parse_error}"
+            confidence = 0.3
+        
+        # Ensure the suggestion is different from original
+        if suggested_text.strip() == current_text.strip():
+            # Force a small change if identical
+            if test_field == 'title':
+                suggested_text = f"Premium {current_text}"
+            else:
+                suggested_text = f"{current_text} Kaliteli malzeme."
+            reasoning += " (Özgün metinden farklılaştırıldı)"
+        
+        print(f"💡 Generated Suggestion: {suggested_text}")
+        print(f"🧠 Reasoning: {reasoning}")
+        print(f"📊 Confidence: {confidence:.1%}")
+        
+        final_result = {
+            "suggestion": suggested_text,
+            "reasoning": reasoning,
+            "confidence": confidence,
+            "original_text": current_text,
+            "test_field": test_field,
+            "queries_used": len(all_queries)
+        }
+        
+        print(f"\n✅ [SUCCESS] A/B Test Suggestion Generated!")
+        print(f"📋 Final Result: {final_result}")
+        print("="*80)
+        
+        return final_result
+        
+    except Exception as e:
+        print(f"\n❌ [ERROR] A/B Test suggestion generation error: {e}")
+        print("🔄 Using smart fallback...")
+        
+        # Smart fallback based on test field and content
+        fallback_suggestion = current_text
+        
+        if test_field == 'title':
+            # Title improvements
+            words = current_text.split()
+            if len(words) > 1:
+                # Add adjective if missing
+                adjectives = ['Premium', 'Şık', 'Modern', 'Kaliteli', 'Özel']
+                existing_adj = any(adj.lower() in current_text.lower() for adj in adjectives)
+                if not existing_adj:
+                    fallback_suggestion = f"Premium {current_text}"
+                else:
+                    # Rearrange or enhance
+                    fallback_suggestion = current_text.replace('-', ' |')
+        else:
+            # Description improvements
+            if not current_text.endswith('.'):
+                fallback_suggestion = f"{current_text}."
+            if 'ideal' not in current_text.lower():
+                fallback_suggestion = f"{fallback_suggestion} İdeal seçim."
+        
+        fallback_result = {
+            "suggestion": fallback_suggestion,
+            "reasoning": f"Hata nedeniyle otomatik öneri kullanıldı: {e}",
+            "confidence": 0.3,
+            "original_text": current_text,
+            "test_field": test_field,
+            "queries_used": 0
+        }
+        
+        print(f"🔄 Fallback result: {fallback_result}")
+        print("="*80)
+        
+        return fallback_result 
