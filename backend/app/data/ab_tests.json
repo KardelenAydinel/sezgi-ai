@@ -22,5 +22,13 @@
     "b_variant": "Premium Open-Ear Sport Kulakl\u0131k",
     "start_date": "2025-08-05T15:35:55.449Z",
     "is_active": true
+  },
+  "225fd8eb-a760-4146-997d-c96d9591bbf5": {
+    "product_id": "225fd8eb-a760-4146-997d-c96d9591bbf5",
+    "test_field": "title",
+    "a_variant": "Premium Derz Boya Kalemi - Antrasit",
+    "b_variant": "Premium Derz Boya Kalemi - Antrasit Renk",
+    "start_date": "2025-08-05T19:48:13.045Z",
+    "is_active": true
   }
 }
