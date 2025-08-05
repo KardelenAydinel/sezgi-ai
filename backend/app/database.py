@@ -718,13 +718,26 @@ def search_products_by_tags(search_tags: List[str], limit: int = 4, min_price: f
     conn = sqlite3.connect(ECOMMERCE_DB_PATH)
     cursor = conn.cursor()
     
-    # Base query
-    query = '''
-        SELECT id, name, description, price, currency, image_url, tags, category, 
-               subcategory, brand, stock, rating, review_count, common_queries
-        FROM ecommerce_products 
-        WHERE stock > 0
-    '''
+    # Check if new columns exist
+    cursor.execute("PRAGMA table_info(ecommerce_products)")
+    columns = [column[1] for column in cursor.fetchall()]
+    
+    # Base query with conditional columns
+    if 'image_base64' in columns and 'visual_representation' in columns:
+        query = '''
+            SELECT id, name, description, price, currency, image_url, tags, category, 
+                   subcategory, brand, stock, rating, review_count, common_queries,
+                   image_base64, visual_representation
+            FROM ecommerce_products 
+            WHERE stock > 0
+        '''
+    else:
+        query = '''
+            SELECT id, name, description, price, currency, image_url, tags, category, 
+                   subcategory, brand, stock, rating, review_count, common_queries
+            FROM ecommerce_products 
+            WHERE stock > 0
+        '''
     params = []
     
     # Price filters
@@ -779,7 +792,9 @@ def search_products_by_tags(search_tags: List[str], limit: int = 4, min_price: f
                 stock=row[10],
                 rating=row[11],
                 review_count=row[12],
-                common_queries=common_queries
+                common_queries=common_queries,
+                image_base64=row[14] if len(row) > 14 else None,
+                visual_representation=row[15] if len(row) > 15 else None
             )
             products_with_scores.append((product, similarity_score))
     
@@ -895,14 +910,29 @@ def get_all_ecommerce_products(limit: int = 20) -> List[EcommerceProduct]:
     conn = sqlite3.connect(ECOMMERCE_DB_PATH)
     cursor = conn.cursor()
     
-    cursor.execute('''
-        SELECT id, name, description, price, currency, image_url, tags, category, 
-               subcategory, brand, stock, rating, review_count, common_queries
-        FROM ecommerce_products 
-        WHERE stock > 0
-        ORDER BY rating DESC, review_count DESC
-        LIMIT ?
-    ''', (limit,))
+    # Check if new columns exist
+    cursor.execute("PRAGMA table_info(ecommerce_products)")
+    columns = [column[1] for column in cursor.fetchall()]
+    
+    if 'image_base64' in columns and 'visual_representation' in columns:
+        cursor.execute('''
+            SELECT id, name, description, price, currency, image_url, tags, category, 
+                   subcategory, brand, stock, rating, review_count, common_queries,
+                   image_base64, visual_representation
+            FROM ecommerce_products 
+            WHERE stock > 0
+            ORDER BY rating DESC, review_count DESC
+            LIMIT ?
+        ''', (limit,))
+    else:
+        cursor.execute('''
+            SELECT id, name, description, price, currency, image_url, tags, category, 
+                   subcategory, brand, stock, rating, review_count, common_queries
+            FROM ecommerce_products 
+            WHERE stock > 0
+            ORDER BY rating DESC, review_count DESC
+            LIMIT ?
+        ''', (limit,))
     
     rows = cursor.fetchall()
     conn.close()
@@ -923,8 +953,101 @@ def get_all_ecommerce_products(limit: int = 20) -> List[EcommerceProduct]:
             stock=row[10],
             rating=row[11],
             review_count=row[12],
-            common_queries=json.loads(row[13]) if row[13] else []
+            common_queries=json.loads(row[13]) if row[13] else [],
+            image_base64=row[14] if len(row) > 14 else None,
+            visual_representation=row[15] if len(row) > 15 else None
         )
+        products.append(product)
+    
+    return products
+
+def update_product_image_base64(product_id: str, image_base64: str, visual_representation: str = None):
+    """Update product with generated image base64 data"""
+    conn = sqlite3.connect(ECOMMERCE_DB_PATH)
+    cursor = conn.cursor()
+    
+    # Add image_base64 column if it doesn't exist
+    cursor.execute("PRAGMA table_info(ecommerce_products)")
+    columns = [column[1] for column in cursor.fetchall()]
+    
+    if 'image_base64' not in columns:
+        cursor.execute('ALTER TABLE ecommerce_products ADD COLUMN image_base64 TEXT')
+        print("Added image_base64 column to ecommerce_products table")
+    
+    if 'visual_representation' not in columns:
+        cursor.execute('ALTER TABLE ecommerce_products ADD COLUMN visual_representation TEXT')
+        print("Added visual_representation column to ecommerce_products table")
+    
+    # Update the product
+    if visual_representation:
+        cursor.execute('''
+            UPDATE ecommerce_products 
+            SET image_base64 = ?, visual_representation = ?
+            WHERE id = ?
+        ''', (image_base64, visual_representation, product_id))
+    else:
+        cursor.execute('''
+            UPDATE ecommerce_products 
+            SET image_base64 = ?
+            WHERE id = ?
+        ''', (image_base64, product_id))
+    
+    conn.commit()
+    conn.close()
+
+def get_all_ecommerce_products_for_image_generation() -> List[Dict[str, Any]]:
+    """Get all ecommerce products specifically for image generation processing"""
+    conn = sqlite3.connect(ECOMMERCE_DB_PATH)
+    cursor = conn.cursor()
+    
+    # Check if image_base64 column exists
+    cursor.execute("PRAGMA table_info(ecommerce_products)")
+    columns = [column[1] for column in cursor.fetchall()]
+    
+    if 'image_base64' in columns and 'visual_representation' in columns:
+        cursor.execute('''
+            SELECT id, name, description, price, currency, image_url, tags, category, 
+                   subcategory, brand, stock, rating, review_count, image_base64, visual_representation
+            FROM ecommerce_products 
+            ORDER BY rating DESC, review_count DESC
+        ''')
+    elif 'image_base64' in columns:
+        cursor.execute('''
+            SELECT id, name, description, price, currency, image_url, tags, category, 
+                   subcategory, brand, stock, rating, review_count, image_base64, NULL as visual_representation
+            FROM ecommerce_products 
+            ORDER BY rating DESC, review_count DESC
+        ''')
+    else:
+        cursor.execute('''
+            SELECT id, name, description, price, currency, image_url, tags, category, 
+                   subcategory, brand, stock, rating, review_count, NULL as image_base64, NULL as visual_representation
+            FROM ecommerce_products 
+            ORDER BY rating DESC, review_count DESC
+        ''')
+    
+    rows = cursor.fetchall()
+    conn.close()
+    
+    products = []
+    for row in rows:
+        product = {
+            'id': row[0],
+            'name': row[1],
+            'description': row[2],
+            'price': row[3],
+            'currency': row[4],
+            'image_url': row[5],
+            'tags': json.loads(row[6]) if row[6] else [],
+            'category': row[7],
+            'subcategory': row[8],
+            'brand': row[9],
+            'stock': row[10],
+            'rating': row[11],
+            'review_count': row[12],
+            'image_base64': row[13] if len(row) > 13 else None,
+            'visual_representation': row[14] if len(row) > 14 else None
+        }
         products.append(product)
     
     return products

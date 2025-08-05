@@ -38,7 +38,9 @@ from app.database import (
     save_product_to_db,
     get_products_from_db,
     search_products_by_visual_description,
-    get_all_ecommerce_products
+    get_all_ecommerce_products,
+    get_all_ecommerce_products_for_image_generation,
+    update_product_image_base64
 )
 
 router = APIRouter()
@@ -141,6 +143,102 @@ def ask_llm_for_safer_prompt(original_representation: str) -> str:
         print(f"Could not get a safer prompt from LLM, falling back to product name. Error: {e}")
         return "a generic, new, and clean product"
 
+def generate_visual_representation_with_gemini(product_name: str, product_description: str) -> str:
+    """Generate visual representation for a product using Gemini 2.5 Flash"""
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return f"a generic {product_name.lower()}"
+    
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    
+    prompt = (
+        f"Sen bir görsel üretim yapay zekası için prompt yazma uzmanısın. "
+        f"Ürün adı: '{product_name}' ve açıklama: '{product_description}' verilen bu ürün için, "
+        f"görsel üretim AI'ının anlayabileceği detaylı bir İngilizce görsel tanım oluştur. "
+        f"Bu tanım ürünün fiziksel özelliklerini, şeklini ve materyalini içermeli ancak marka, yazı veya logo içermemelidir. "
+        f"Ürünün tamamının görüneceği ve hiçbir parçasının kırpılmayacağı şekilde tanımla. "
+        f"Sadece görsel tanımı ver, başka açıklama ekleme."
+    )
+    
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+    
+    try:
+        response = requests.post(url, json=payload, timeout=30)
+        response.raise_for_status()
+        visual_representation = response.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+        print(f"Generated visual representation for '{product_name}': {visual_representation}")
+        return visual_representation
+    except Exception as e:
+        print(f"Failed to generate visual representation for '{product_name}': {e}")
+        return f"a generic {product_name.lower()}, {product_description}"
+
+def generate_and_encode_image_for_db_product(product: dict) -> dict:
+    """Generate image for database product with visual representation generation"""
+    
+    # First, generate visual representation if not exists
+    visual_description = product.get('visual_representation')
+    if not visual_description:
+        visual_description = generate_visual_representation_with_gemini(
+            product.get('name', ''), 
+            product.get('description', '')
+        )
+        product['visual_representation'] = visual_description
+    
+    # Use the existing image generation logic
+    style_prompt = (
+        f"Professional product photograph of {visual_description}. "
+        "The product is shown by itself, isolated on a seamless, solid pure white background. "
+        "The entire product must be fully visible and centered in the frame, not cropped or cut off. "
+        "Shot in a professional photo studio with bright, soft, even commercial lighting. "
+        "Photorealistic, hyper-detailed, 4K, e-commerce style, online marketplace photo."
+    )
+    
+    negative_style_prompt = (
+        "text, words, logo, branding, labels, writing, signature, watermark, packaging with text, "
+        "people, person, human, hands, fingers, faces"
+        "clutter, messy, floor, table, shadows, complex background, real-world environment, "
+        "3D render, CGI, drawing, sketch, illustration, cartoon, painting, art, unrealistic"
+    )
+
+    base64_image = generate_image_with_vertex(
+        prompt=style_prompt,
+        negative_prompt=negative_style_prompt
+    )
+    
+    # --- Fallback Attempt if the first one fails ---
+    if base64_image is None:
+        print(f"Primary image generation failed for '{product.get('name')}'. Asking LLM for a safer prompt.")
+        
+        # Ask the text LLM to refine the failing prompt
+        safer_visual_description = ask_llm_for_safer_prompt(visual_description)
+        
+        # Retry with the new, safer prompt
+        safer_style_prompt = (
+            f"Professional product photograph of {safer_visual_description}. "
+            "The entire product must be fully visible and centered in the frame, not cropped or cut off. "
+            "The product is perfectly isolated on a seamless, solid pure white background. "
+            "Shot in a professional photo studio with bright, soft, even commercial lighting. "
+            "Photorealistic, hyper-detailed, 4K, e-commerce style, online marketplace photo."
+        )
+        
+        base64_image = generate_image_with_vertex(
+            prompt=safer_style_prompt,
+            negative_prompt=negative_style_prompt
+        )
+        
+        # If it still fails, use a final, super-safe fallback
+        if base64_image is None:
+            print("LLM-assisted retry also failed. Using a generic prompt as a last resort.")
+            subject = product.get('name', 'product')
+            super_safe_prompt = f"Professional product photograph of a generic {subject}."
+            base64_image = generate_image_with_vertex(
+                prompt=super_safe_prompt,
+                negative_prompt=negative_style_prompt
+            )
+
+    product['image_base64'] = base64_image
+    return product
+
 def generate_and_encode_image(product: dict) -> dict:
     """Task function to generate an image for a single product and add the base64 string to it. Includes a retry mechanism."""
     
@@ -226,14 +324,14 @@ def search_ecommerce_products(req: SearchRequest):
             category=req.category
         )
         
-        # Convert EcommerceProduct objects to dict format for image generation
+        # Convert EcommerceProduct objects to dict format and use stored images
         products_dict = []
         for product in products:
             product_dict = {
                 "urun_adi": product.name,
                 "urun_aciklama": product.description,
                 "urun_adi_en": product.name,  # Using same name for English
-                "visual_representation": f"a {product.name.lower()}, {product.description}",
+                "visual_representation": getattr(product, 'visual_representation', f"a {product.name.lower()}, {product.description}"),
                 "price": product.price,
                 "currency": product.currency,
                 "brand": product.brand,
@@ -242,30 +340,40 @@ def search_ecommerce_products(req: SearchRequest):
                 "tags": product.tags,
                 "rating": product.rating,
                 "review_count": product.review_count,
-                "image_base64": None  # Will be populated by image generation
+                "image_base64": getattr(product, 'image_base64', None)  # Use stored image if available
             }
             products_dict.append(product_dict)
         
-        # Generate images for all products concurrently
-        from concurrent.futures import ThreadPoolExecutor, as_completed
+        # Only generate images for products that don't have them stored
+        products_needing_images = [p for p in products_dict if not p.get('image_base64')]
         
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            # Submit all image generation tasks to the thread pool
-            future_to_product = {executor.submit(generate_and_encode_image, p): p for p in products_dict}
+        if products_needing_images:
+            print(f"[SEARCH] Generating images for {len(products_needing_images)} products without stored images")
             
-            # Collect results as they complete
-            updated_products = []
-            for future in as_completed(future_to_product):
-                try:
-                    updated_product = future.result()
-                    updated_products.append(updated_product)
-                    print(f"Generated image for: {updated_product.get('urun_adi')}")
-                except Exception as exc:
-                    print(f"Image generation failed for product: {exc}")
-                    # Add the original product without an image
-                    original_product = future_to_product[future]
-                    original_product['image_base64'] = None
-                    updated_products.append(original_product)
+            # Generate images for products that don't have them
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                # Submit image generation tasks only for products without images
+                future_to_product = {executor.submit(generate_and_encode_image, p): p for p in products_needing_images}
+                
+                # Collect results as they complete
+                for future in as_completed(future_to_product):
+                    try:
+                        updated_product = future.result()
+                        # Find and update the corresponding product in products_dict
+                        for i, p in enumerate(products_dict):
+                            if p["urun_adi"] == updated_product.get("urun_adi"):
+                                products_dict[i]["image_base64"] = updated_product.get("image_base64")
+                                break
+                        print(f"Generated image for: {updated_product.get('urun_adi')}")
+                    except Exception as exc:
+                        print(f"Image generation failed for product: {exc}")
+            
+            updated_products = products_dict
+        else:
+            print(f"[SEARCH] All {len(products_dict)} products already have stored images")
+            updated_products = products_dict
         
         execution_time = time.time() - start_time
         
@@ -620,16 +728,15 @@ async def get_similar_products(req: ProductTagRequest):
         # Optionally limit number of cards if client requested; for now, return all matches
         # similar_products_data = similar_products_data[:4]
         
-        # Convert to the expected format
+        # Convert to the expected format and use stored images
         products_data = []
         for product_dict in similar_products_data:
             product_data = {
                 "urun_adi": product_dict['name'],
                 "urun_aciklama": product_dict['description'],
                 "urun_adi_en": product_dict['name'],  # Using same name for English
-                "visual_representation": f"A product image of {product_dict['name']}",
-                "image_base64": None,  # We'll use image_url instead
-                "image_url": product_dict['image_url'],
+                "visual_representation": product_dict.get('visual_representation', f"A product image of {product_dict['name']}"),
+                "image_base64": product_dict.get('image_base64'),  # Use stored image_base64 from database
                 "price": product_dict['price'],
                 "currency": product_dict['currency'],
                 "brand": product_dict['brand'],
@@ -920,3 +1027,119 @@ async def get_ab_test_ai_suggestion(req: ABTestSuggestionRequest):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI suggestion generation failed: {e}")
+
+@router.post("/db_image_generation")
+def generate_images_for_database_products():
+    """
+    Database'deki tüm ürünler için AI ile görsel oluştur ve kaydet
+    Bu endpoint'i sadece bir kere çalıştırarak database'i initialize etmek için kullanın
+    
+    Returns:
+        Işlem durumu ve oluşturulan görsel sayısı
+    """
+    try:
+        # Environment variable checks
+        api_key = os.getenv("GEMINI_API_KEY")
+        project_id = os.getenv("GCP_PROJECT_ID")
+        location = os.getenv("GCP_REGION")
+        
+        if not all([api_key, project_id, location]):
+            raise HTTPException(
+                status_code=500, 
+                detail="Required environment variables (GEMINI_API_KEY, GCP_PROJECT_ID, GCP_REGION) are not set."
+            )
+        
+        # Initialize Vertex AI
+        try:
+            vertexai.init(project=project_id, location=location)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to initialize Vertex AI: {e}")
+        
+        print("[DB_IMAGE_GEN] Starting database image generation...")
+        
+        # Get all products from database
+        products = get_all_ecommerce_products_for_image_generation()
+        
+        if not products:
+            return {
+                "success": True,
+                "message": "No products found in database",
+                "generated_count": 0,
+                "failed_count": 0
+            }
+        
+        print(f"[DB_IMAGE_GEN] Found {len(products)} products in database")
+        
+        # Filter products that don't already have images
+        products_without_images = [
+            p for p in products 
+            if not p.get('image_base64') or p.get('image_base64') is None
+        ]
+        
+        if not products_without_images:
+            return {
+                "success": True,
+                "message": "All products already have generated images",
+                "generated_count": 0,
+                "failed_count": 0,
+                "total_products": len(products)
+            }
+        
+        print(f"[DB_IMAGE_GEN] {len(products_without_images)} products need image generation")
+        
+        # Generate images concurrently
+        generated_count = 0
+        failed_count = 0
+        
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            # Submit all image generation tasks
+            future_to_product = {
+                executor.submit(generate_and_encode_image_for_db_product, p): p 
+                for p in products_without_images
+            }
+            
+            # Process results as they complete
+            for future in as_completed(future_to_product):
+                try:
+                    updated_product = future.result()
+                    product_id = updated_product['id']
+                    image_base64 = updated_product.get('image_base64')
+                    visual_representation = updated_product.get('visual_representation')
+                    
+                    if image_base64:
+                        # Update product in database
+                        update_product_image_base64(
+                            product_id=product_id,
+                            image_base64=image_base64,
+                            visual_representation=visual_representation
+                        )
+                        generated_count += 1
+                        print(f"[DB_IMAGE_GEN] ✅ Generated and saved image for: {updated_product.get('name')} ({generated_count}/{len(products_without_images)})")
+                    else:
+                        failed_count += 1
+                        print(f"[DB_IMAGE_GEN] ❌ Failed to generate image for: {updated_product.get('name')}")
+                        
+                except Exception as exc:
+                    failed_count += 1
+                    original_product = future_to_product[future]
+                    print(f"[DB_IMAGE_GEN] ❌ Exception during image generation for '{original_product.get('name')}': {exc}")
+        
+        success_message = (
+            f"Database image generation completed. "
+            f"Generated: {generated_count}, Failed: {failed_count}, "
+            f"Total products: {len(products)}"
+        )
+        
+        print(f"[DB_IMAGE_GEN] {success_message}")
+        
+        return {
+            "success": True,
+            "message": success_message,
+            "generated_count": generated_count,
+            "failed_count": failed_count,
+            "total_products": len(products),
+            "products_without_images": len(products_without_images)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database image generation failed: {e}")

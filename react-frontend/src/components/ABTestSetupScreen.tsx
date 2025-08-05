@@ -495,9 +495,10 @@ const ABTestSetupScreen: React.FC = () => {
               <br />
               <br />
               <strong>Yapay Zeka Destekli B Varyantı ile Tanışın!</strong><br />
-              Platformumuza entegre yapay zeka, genel satış trendlerini ve müşteri davranışlarını analiz eder ve size yüksek performans potansiyeline sahip B varyantı 
-              önerileri sunar. Bu sayede en etkili değişiklikleri kolayca test edebilir ve 
-              satışlarınızı artırabilirsiniz.
+              Sezgi, yapay zeka entegrasyonu sayesinde genel satış trendlerini ve müşteri davranışlarını analiz ederek size yüksek performans potansiyeline sahip B varyantı önerileri sunar. Bu sayede en etkili değişiklikleri kolayca test edebilir ve satışlarınızı artırabilirsiniz.
+
+
+
 
             </InfoText>
           </InfoBox>
@@ -571,7 +572,7 @@ const ABTestSetupScreen: React.FC = () => {
 
           <InfoBox>
             <InfoText>
-              <strong>İpucu:</strong> Güvenilir sonuçlara ulaşmak adına testinizi en az 7 gün aktif tutmanızı ve her seçeneğin minimum 100 defa görülmesini beklemenizi öneririz.
+              <strong>İpucu:</strong> Güvenilir sonuçlara ulaşmak adına testinizi en az 7 gün aktif tutmanızı ve her seçeneğin minimum 100 defa görüntülenmesini beklemenizi öneririz.
 
             </InfoText>
           </InfoBox>

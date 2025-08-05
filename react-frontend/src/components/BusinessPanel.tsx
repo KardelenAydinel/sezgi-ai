@@ -53,7 +53,7 @@ const BackButton = styled.button`
   align-items: center;
   gap: ${({ theme }) => theme.spacing.sm};
   padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.md};
-  background-color: transparent;
+  background-color: white;
   border: 1px solid ${({ theme }) => theme.colors.grey[400]};
   border-radius: 20px;
   cursor: pointer;
@@ -62,7 +62,7 @@ const BackButton = styled.button`
   transition: all 0.2s ease;
 
   &:hover {
-    background-color: ${({ theme }) => theme.colors.grey[100]};
+    background-color: white;
     transform: translateY(-1px);
   }
 `;

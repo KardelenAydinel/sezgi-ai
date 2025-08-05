@@ -51,6 +51,8 @@ class EcommerceProduct(BaseModel):
     rating: Optional[float] = None
     review_count: Optional[int] = None
     common_queries: Optional[List[str]] = None
+    image_base64: Optional[str] = None  # AI generated base64 image
+    visual_representation: Optional[str] = None  # Visual description for image generation
     
 class SearchRequest(BaseModel):
     """Arama isteği modeli"""

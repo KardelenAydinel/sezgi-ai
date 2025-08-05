@@ -583,7 +583,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ initialMessage }) => {
             onClick={handleSearchSubmit}
             disabled={!searchQuery.trim()}
           >
-            Ara
+            <img src="/search_logo.png" alt="Search" style={{width: "100%", height: "100%", opacity: 0.65}} />
           </SearchButton>
           <CloseSearchButton onClick={handleCloseSearch}>
             ✕

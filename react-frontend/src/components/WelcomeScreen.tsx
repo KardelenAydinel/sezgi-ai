@@ -207,6 +207,13 @@ const MainContent = styled.main`
   text-align: center;
 `;
 
+const Footer = styled.footer`
+  padding: 0;
+  text-align: center;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.grey[500]};
+`;
+
 // box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
 const LogoContainer = styled.div`
   width: 110px;
@@ -543,7 +550,7 @@ const WelcomeScreen: React.FC = () => {
   }, [placeholderExamples.length]);
 
   const examples = [
-    "masanın bacağını sabitleyen L şeklindeki metal parça",
+    "çekilebilen, ayakları koltuğun altına giren sehpa",
     "kahve fincanının altına konan küçük tabak",
     "saçımı tepede topuz yapan o sünger halka"
   ];
@@ -606,7 +613,7 @@ const WelcomeScreen: React.FC = () => {
           </Title>
 
           <Subtitle>
-            Adı dilinin ucunda, kendisi bir tık uzağında.
+            Adı dilinin ucunda, Sezgi ile bir tık uzağında.
           </Subtitle>
 
           <SearchContainer>
@@ -673,6 +680,9 @@ const WelcomeScreen: React.FC = () => {
             </StepsContainer>
           </HowItWorksSection>
         </MainContent>
+        <Footer>
+          © 2025 Sezgi
+        </Footer>
       </LandingWrapper>
 
       {/* Chat Page */}

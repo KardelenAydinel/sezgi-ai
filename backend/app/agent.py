@@ -274,7 +274,7 @@ async def search_ecommerce_products_via_mcp_agent(tags: List[str], limit: int = 
                         if isinstance(product, dict):
                             products_dict.append(product)
                         else:
-                            # Object to dict conversion
+                            # Object to dict conversion including image_base64
                             product_dict = {
                                 'id': getattr(product, 'id', ''),
                                 'name': getattr(product, 'name', ''),
@@ -282,6 +282,8 @@ async def search_ecommerce_products_via_mcp_agent(tags: List[str], limit: int = 
                                 'price': getattr(product, 'price', 0),
                                 'currency': getattr(product, 'currency', 'TL'),
                                 'image_url': getattr(product, 'image_url', ''),
+                                'image_base64': getattr(product, 'image_base64', None),
+                                'visual_representation': getattr(product, 'visual_representation', None),
                                 'tags': getattr(product, 'tags', []),
                                 'category': getattr(product, 'category', ''),
                                 'subcategory': getattr(product, 'subcategory', ''),
@@ -316,7 +318,7 @@ async def search_ecommerce_products_fallback(tags: List[str], limit: int = 8) ->
         from app.database import search_products_by_tags
         products = search_products_by_tags(search_tags=tags, limit=limit)
         
-        # Convert to dict format
+        # Convert to dict format including image_base64
         products_dict = []
         for product in products:
             product_dict = {
@@ -326,6 +328,8 @@ async def search_ecommerce_products_fallback(tags: List[str], limit: int = 8) ->
                 'price': product.price,
                 'currency': product.currency,
                 'image_url': product.image_url,
+                'image_base64': getattr(product, 'image_base64', None),
+                'visual_representation': getattr(product, 'visual_representation', None),
                 'tags': product.tags,
                 'category': product.category,
                 'subcategory': product.subcategory,
