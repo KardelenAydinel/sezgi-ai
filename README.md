@@ -18,6 +18,10 @@ Hackathon teması olan "E-ticarette İnovasyon" kapsamında, projemiz şu temel 
 -   **Satıcı Paneli (Business Panel):** Satıcıların kendi ürünlerini yönetebildiği ve A/B testleri oluşturabildiği özel bir arayüz.
 -   **Yapay Zeka Destekli A/B Testleri:** Satıcılar, ürün başlıkları veya açıklamaları için yapay zekadan alternatif metin önerileri alabilir ve bu varyasyonları test ederek dönüşüm oranlarını optimize edebilir.
 
+
+## 📊 Örnekler
+
+
 ## 🛠️ Teknik Mimari ve İşleyiş
 
 Proje, modern bir teknoloji yığını üzerine inşa edilmiştir: **React (TypeScript)** ile geliştirilmiş dinamik bir ön uç ve **Python (FastAPI)** ile oluşturulmuş güçlü bir arka uç.
