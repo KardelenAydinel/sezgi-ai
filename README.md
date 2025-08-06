@@ -28,23 +28,70 @@ Proje, modern bir teknoloji yığını üzerine inşa edilmiştir: **React (Type
 
 ### Akış Diyagramı
 
-```mermaid
-graph TD
-    A[Kullanıcı Arayüzü (React)] -->|1. Ürün Tarifi Gönderir| B(FastAPI Backend)
-    B -->|2. İstek Agent'a İletilir| C{Agentic AI Sistemi}
-    C -->|3. Adım 1: Tag Üretici| D[Gemini: Tarifi Anlar ve Etiket Üretir]
-    D -->|4. Adım 2: Ürün Arama| E[Veritabanı (Ecommerce DB)]
-    E -->|5. Benzer Ürünleri Bulur| C
-    C -->|6. Adım 3: Ürün Sıralayıcı| F[Gemini: Ürünleri Değerlendirir ve Sıralar]
-    F -->|7. Sonuçları Döndürür| B
-    B -->|8. Yanıtı Arayüze Gönderir| A
+```
+Kullanıcı Arayüzü (React)
+        |
+        | 1.a Ürün Tarifi Gönderir
+        v
+FastAPI Backend
+        |
+        | 1.b İstek, ürün görseli oluşturulması için Gemini'a iletilir
+        v
+Gemini Image Generation
+        |
+        | 1.c Kullanıcı, ürün görsellerinden istediği ürünü seçer.
+        |
+        | 2. Ürün Agent'a İletilir
+        v
++------------------------+
+|   Agentic AI Sistemi   |
++------------------------+
+        |
+        | 3. Adım 1: Tag Üretici
+        v
+Gemini: Seçilen ürün için tag'ler oluşturulur.
+        |
+        | 4. Adım 2: Ürün Arama
+        v
+Veritabanı (Ecommerce DB)
+        |
+        | 5. Benzer Ürünleri Bulur (MCP)
+        v
+<--- geri Agentic AI Sistemi
+        |
+        | 6. Adım 3: Ürün Sıralayıcı
+        v
+Gemini: Ürünleri Değerlendirir ve Sıralar
+        |
+        | 7. Sonuçları Döndürür
+        v
+FastAPI Backend
+        |
+        | 8. Yanıtı Arayüze Gönderir
+        v
+Kullanıcı Arayüzü (React)
 
-    subgraph "Satıcı Paneli"
-        G[A/B Test Arayüzü] -->|a. Test Başlatma İsteği| B
-        B -->|b. AI Öneri İsteği| H{A/B Test Agent'ı}
-        H -->|c. Yeni Metin Önerir| B
-        B -->|d. Öneriyi Arayüze Gönderir| G
-    end
+--------------------------------------------------------
+
+          [ Satıcı Paneli Akışı ]
+
+A/B Test Arayüzü
+        |
+        | a. Test Başlatma İsteği
+        v
+FastAPI Backend
+        |
+        | b. AI Öneri İsteği
+        v
+A/B Test Agent'ı
+        |
+        | c. Yeni Metin Önerir
+        v
+FastAPI Backend
+        |
+        | d. Öneriyi Arayüze Gönderir
+        v
+A/B Test Arayüzü
 ```
 
 
@@ -66,7 +113,7 @@ Kullanıcı deneyiminin merkezinde, `react-frontend` dizininde yer alan ve aşa�
 
 ### 3. **Agentic AI Sistemi (`agent.py`)**
 
-Projemizin kalbi, `backend/app/agent.py` dosyasında tanımlanan çok adımlı yapay zeka ajanıdır. Bu sistem, karmaşık görevleri daha küçük ve yönetilebilir adımlara bölerek çalışır:
+Projemizin kalbi, `backend/app/agent.py` dosyasında tanımlanan çok adımlı yapay zeka ajanıdır. Agentic AI sisteminin yapısı Agno Framework kullanıldı. Bu sistem, karmaşık görevleri daha küçük ve yönetilebilir adımlara bölerek çalışır:
 
 1.  **Tag Generator Agent:** Kullanıcının ürün tarifini alır, Gemini modelini kullanarak bu tarife uygun e-ticaret etiketleri (`"bluetooth_kulaklik"`, `"ev_dekorasyonu"` vb.) üretir.
 2.  **Product Search:** Üretilen etiketleri kullanarak `ecommerce.db` veritabanında, **kosinüs benzerliği (cosine similarity)** ile semantik bir arama gerçekleştirir. Bu, etiketlerin sırasından bağımsız olarak en alakalı sonuçların bulunmasını sağlar.
