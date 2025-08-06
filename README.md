@@ -20,7 +20,12 @@ Hackathon teması olan "E-ticarette İnovasyon" kapsamında, projemiz şu temel 
 
 
 ## 📊 Örnekler
-
+![WhatsApp Image 2025-08-06 at 20 47 34](https://github.com/user-attachments/assets/e3875731-5cfe-47cd-b206-d6e74850951d)
+![WhatsApp Image 2025-08-06 at 20 51 27](https://github.com/user-attachments/assets/d1bab7bd-7a69-4ad0-8a58-cfcd877970e6)
+![WhatsApp Image 2025-08-06 at 20 53 08](https://github.com/user-attachments/assets/979a93a6-92a5-4274-8c8a-cbd43ca5ab3c)
+![WhatsApp Image 2025-08-06 at 20 53 21](https://github.com/user-attachments/assets/4d39c325-8ae8-4fc6-9b29-a796ae383fbf)
+![WhatsApp Image 2025-08-06 at 20 54 09](https://github.com/user-attachments/assets/dfed81b8-e1ab-4413-9942-0e6212573ed9)
+![WhatsApp Image 2025-08-06 at 20 58 39](https://github.com/user-attachments/assets/001cb09f-23a5-4307-b715-fb8a4166f6e5)
 
 ## 🛠️ Teknik Mimari ve İşleyiş
 
@@ -121,31 +126,6 @@ Projemizin kalbi, `backend/app/agent.py` dosyasında tanımlanan çok adımlı y
 4.  **A/B Test Suggestion Agent:** Satıcının bir ürünü için, mevcut kullanıcı arama sorgularını analiz ederek daha etkili olabilecek alternatif başlık ve açıklamalar önerir.
 
 Bu mimari, hem daha isabetli sonuçlar üretmemizi sağlar hem de API çağrılarını optimize ederek maliyeti düşürür.
-
-## 🚀 Projeyi Çalıştırma
-
-### Gereksinimler
--   Node.js (v16 veya üstü)
--   Python 3.10+
--   `pip` ve `npm` (veya `yarn`)
-
-### Kurulum
-
-1.  **Backend Kurulumu:**
-    ```bash
-    cd backend
-    pip install -r requirements.txt
-    # .env dosyasını oluşturup gerekli API anahtarlarını ekleyin (GEMINI_API_KEY, GCP_PROJECT_ID vb.)
-    uvicorn main:app --reload --port 8000
-    ```
-
-2.  **Frontend Kurulumu:**
-    ```bash
-    cd react-frontend
-    npm install
-    npm start
-    ```
-Uygulama, `http://localhost:3000` adresinde açılacaktır. Arka uç sunucusunun `http://localhost:8000` adresinde çalıştığından emin olun.
 
 Copyright © Kardelen Aydınel, Ebru Naz Ayış 2025
 All rights reserved.
