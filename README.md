@@ -1,10 +1,10 @@
 # Sezgi: Adı dilinin ucunda, Sezgi ile bir tık uzağında.
 
-Sezgi, kullanıcıların adını unuttuğu veya sadece tarif edebildiği ürünleri yapay zeka ve görsel arama teknolojileriyle bulan, e-ticaret deneyimini kökten değiştiren bir alışveriş asistanıdır. 
+Sezgi, kullanıcıların adını unuttuğu veya sadece tarif edebildiği ürünleri yapay zeka teknolojileriyle bulan, e-ticaret deneyimini kökten değiştiren bir alışveriş asistanıdır. 
 
 ## 🚀 Projenin Amacı ve Çözdüğü Problem
 
-Geleneksel e-ticaret platformları, kullanıcıların aradıkları ürünün adını tam olarak bilmesini gerektirir. "Dilimin ucunda ama adı aklıma gelmiyor" anları, genellikle sonuçsuz kalan aramalara ve hayal kırıklığına yol açar. **Sezgi**, bu problemi ortadan kaldırır. Kullanıcılar, "ucunda fırçası olan, fayans aralarını temizleyen kalem gibi şey" gibi günlük konuşma diliyle yaptıkları tariflerle veya bir ürünün fotoğrafını yükleyerek aradıklarını saniyeler içinde bulabilirler.
+Geleneksel e-ticaret platformları, kullanıcıların aradıkları ürünün adını tam olarak bilmesini gerektirir. "Dilimin ucunda ama adı aklıma gelmiyor" anları, genellikle sonuçsuz kalan aramalara ve hayal kırıklığına yol açar. **Sezgi**, bu problemi ortadan kaldırır. Kullanıcılar, "ucunda fırçası olan, fayans aralarını temizleyen kalem gibi şey" gibi günlük konuşma diliyle yaptıkları tariflerle aradıklarını saniyeler içinde bulabilirler.
 
 Hackathon teması olan "E-ticarette İnovasyon" kapsamında, projemiz şu temel hedeflere odaklanmıştır:
 1.  **Agentic AI Mimarisi:** Kullanıcı niyetini anlayan, çok adımlı görevleri yürüten ve kendi kendine karar alabilen bir yapay zeka sistemi kurmak. **MCP bağlantısı ile** bu sistemi güçlendirmek, e-ticaret database'imize rahatlıkla ulaşmasını sağlamak.
