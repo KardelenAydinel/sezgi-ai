@@ -28,23 +28,25 @@ Proje, modern bir teknoloji yığını üzerine inşa edilmiştir: **React (Type
 
 ### Akış Diyagramı
 
-```
-    A[Kullanıcı Arayüzü (React)] -->|1. Ürün Tarifi Gönderir| B(FastAPI Backend);
-    B -->|2. İstek Agent'a İletilir| C{Agentic AI Sistemi};
-    C -->|3. Adım 1: Tag Üretici| D[Gemini: Tarifi Anlar ve Etiket Üretir];
-    D -->|4. Adım 2: Ürün Arama| E[Veritabanı (Ecommerce DB)];
-    E -->|5. Benzer Ürünleri Bulur| C;
-    C -->|6. Adım 3: Ürün Sıralayıcı| F[Gemini: Ürünleri Değerlendirir ve Sıralar];
-    F -->|7. Sonuçları Döndürür| B;
-    B -->|8. Yanıtı Arayüze Gönderir| A;
+```mermaid
+graph TD
+    A[Kullanıcı Arayüzü (React)] -->|1. Ürün Tarifi Gönderir| B(FastAPI Backend)
+    B -->|2. İstek Agent'a İletilir| C{Agentic AI Sistemi}
+    C -->|3. Adım 1: Tag Üretici| D[Gemini: Tarifi Anlar ve Etiket Üretir]
+    D -->|4. Adım 2: Ürün Arama| E[Veritabanı (Ecommerce DB)]
+    E -->|5. Benzer Ürünleri Bulur| C
+    C -->|6. Adım 3: Ürün Sıralayıcı| F[Gemini: Ürünleri Değerlendirir ve Sıralar]
+    F -->|7. Sonuçları Döndürür| B
+    B -->|8. Yanıtı Arayüze Gönderir| A
 
     subgraph "Satıcı Paneli"
-        G[A/B Test Arayüzü] -->|a. Test Başlatma İsteği| B;
-        B -->|b. AI Öneri İsteği| H{A/B Test Agent'ı};
-        H -->|c. Yeni Metin Önerir| B;
-        B -->|d. Öneriyi Arayüze Gönderir| G;
+        G[A/B Test Arayüzü] -->|a. Test Başlatma İsteği| B
+        B -->|b. AI Öneri İsteği| H{A/B Test Agent'ı}
+        H -->|c. Yeni Metin Önerir| B
+        B -->|d. Öneriyi Arayüze Gönderir| G
     end
 ```
+
 
 ### 1. **Ön Uç (React & TypeScript)**
 
